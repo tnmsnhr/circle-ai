@@ -1,0 +1,39 @@
+{
+    "manifest_version": 3,
+    "name": "Circle AI Assistant",
+    "description": "AI-powered tool to extract and analyze information from marked areas on web pages",
+    "version": "0.0.1",
+    "permissions": [
+        "scripting",
+        "activeTab",
+        "storage",
+        "tabs"
+    ],
+    "action": {
+        "default_popup": "index.html",
+        "default_icon": "icon.png"
+    },
+    "background": {
+        "service_worker": "background.js"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "contentScript.js"
+            ],
+            "run_at": "document_idle"
+        }
+    ],
+    "host_permissions": [
+        "<all_urls>"
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": ["assets/*"],
+            "matches": ["<all_urls>"]
+        }
+    ]
+}
