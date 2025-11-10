@@ -2,12 +2,12 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import PopupBubble from "./components/PopupBubble.jsx";
-import {getPageSize, uid, bboxOf} from "./utils"
+import { getPageSize, uid, bboxOf, extractTextFromPolygon } from "./utils";
 
-const isHotkey = (e) => e.metaKey
+const isHotkey = (e) => e.metaKey;
 
 export default function OverlayApp() {
-   const [hotkeyReady, setHotkeyReady] = useState(false);
+  const [hotkeyReady, setHotkeyReady] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [pageSize, setPageSize] = useState(getPageSize());
 
@@ -15,12 +15,12 @@ export default function OverlayApp() {
   const [popups, setPopups] = useState([]);
 
   const liveCanvasRef = useRef(null);
-  const inkCanvasRef  = useRef(null);
-  const pointsRef     = useRef([]);                 // current live points
-  const polysRef      = useRef([]);                 // committed: [{ id, pts }]
+  const inkCanvasRef = useRef(null);
+  const pointsRef = useRef([]); // current live points
+  const polysRef = useRef([]); // committed: [{ id, pts }]
 
   const liveCtx = () => liveCanvasRef.current?.getContext("2d");
-  const inkCtx  = () =>  inkCanvasRef.current?.getContext("2d");
+  const inkCtx = () => inkCanvasRef.current?.getContext("2d");
 
   // Size canvases to doc (with DPR) and redraw
   const resizeCanvases = () => {
@@ -32,7 +32,7 @@ export default function OverlayApp() {
       if (!c) continue;
       c.style.width = `${width}px`;
       c.style.height = `${height}px`;
-      c.width  = Math.ceil(width * dpr);
+      c.width = Math.ceil(width * dpr);
       c.height = Math.ceil(height * dpr);
       const ctx = c.getContext("2d");
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -45,7 +45,7 @@ export default function OverlayApp() {
     redrawInk();
 
     // Re-clamp all popups within page bounds
-    setPopups((prev) => prev.map(p => clampPopup(p, width, height)));
+    setPopups((prev) => prev.map((p) => clampPopup(p, width, height)));
   };
 
   const redrawInk = () => {
@@ -91,17 +91,21 @@ export default function OverlayApp() {
   // hotkey hint (Cmd+Ctrl) — visual only
   useEffect(() => {
     const down = (e) => setHotkeyReady(isHotkey(e));
-    const up   = () => setHotkeyReady(false);
+    const up = () => setHotkeyReady(false);
     window.addEventListener("keydown", down, { capture: true });
-    window.addEventListener("keyup", up,   { capture: true });
-    window.addEventListener("blur", up,    { capture: true });
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState !== "visible") up();
-    }, { capture: true });
+    window.addEventListener("keyup", up, { capture: true });
+    window.addEventListener("blur", up, { capture: true });
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (document.visibilityState !== "visible") up();
+      },
+      { capture: true }
+    );
     return () => {
       window.removeEventListener("keydown", down, { capture: true });
-      window.removeEventListener("keyup", up,     { capture: true });
-      window.removeEventListener("blur", up,      { capture: true });
+      window.removeEventListener("keyup", up, { capture: true });
+      window.removeEventListener("blur", up, { capture: true });
     };
   }, []);
 
@@ -123,10 +127,12 @@ export default function OverlayApp() {
       if (!isDrawing) return;
       const pts = pointsRef.current;
       // commit if combo released mid-stroke
-      if (!(isHotkey(e))) return finishCommit();
+      if (!isHotkey(e)) return finishCommit();
       const last = pts[pts.length - 1];
-      const x = e.pageX, y = e.pageY;
-      const dx = x - last.x, dy = y - last.y;
+      const x = e.pageX,
+        y = e.pageY;
+      const dx = x - last.x,
+        dy = y - last.y;
       if (dx * dx + dy * dy < 2) return;
       pts.push({ x, y });
       drawLive();
@@ -154,9 +160,21 @@ export default function OverlayApp() {
         // 1) commit polygon
         polysRef.current.push({ id, pts: pts.slice() });
         redrawInk();
+        const { text } = extractTextFromPolygon(pts);
+        const snippet =
+          text.length > 220 ? text.slice(0, 220).trimEnd() + "…" : text;
         // 2) create popup for this polygon
         const box = bboxOf(pts);
-        setPopups((prev) => [...prev, placePopupForBox(id, box, pageSize)]);
+        const placed = placePopupForBox(id, box, pageSize);
+
+        // setPopups((prev) => [...prev, placePopupForBox(id, box, pageSize)]);
+        setPopups((prev) => [
+          ...prev,
+          {
+            ...placed,
+            content: { bbox: box, text: snippet },
+          },
+        ]);
       }
       // clear live
       pointsRef.current = [];
@@ -172,15 +190,15 @@ export default function OverlayApp() {
     };
 
     window.addEventListener("pointerdown", start, { capture: true });
-    window.addEventListener("pointermove", move,  { capture: true });
-    window.addEventListener("pointerup",   end,   { capture: true });
+    window.addEventListener("pointermove", move, { capture: true });
+    window.addEventListener("pointerup", end, { capture: true });
     window.addEventListener("pointercancel", end, { capture: true });
     window.addEventListener("keydown", esc, { capture: true });
 
     return () => {
       window.removeEventListener("pointerdown", start, { capture: true });
-      window.removeEventListener("pointermove", move,  { capture: true });
-      window.removeEventListener("pointerup",   end,   { capture: true });
+      window.removeEventListener("pointermove", move, { capture: true });
+      window.removeEventListener("pointerup", end, { capture: true });
       window.removeEventListener("pointercancel", end, { capture: true });
       window.removeEventListener("keydown", esc, { capture: true });
     };
@@ -229,14 +247,17 @@ export default function OverlayApp() {
       y,
       content: {
         vertices: Math.max(0, Math.round(box.w + box.h) /* demo */),
-        bbox: box
-      }
+        bbox: box,
+      },
     };
   };
 
   const clampPopup = (p, pageW, pageH) => {
-    const estW = 260, estH = 160, m = 8;
-    let x = p.x, y = p.y;
+    const estW = 260,
+      estH = 160,
+      m = 8;
+    let x = p.x,
+      y = p.y;
     if (x + estW > pageW) x = pageW - estW - m;
     if (y + estH > pageH) y = pageH - estH - m;
     if (x < 0) x = 0;
@@ -248,7 +269,7 @@ export default function OverlayApp() {
   const undo = () => {
     const last = polysRef.current.pop();
     if (last) {
-      setPopups((prev) => prev.filter(p => p.id !== last.id));
+      setPopups((prev) => prev.filter((p) => p.id !== last.id));
       redrawInk();
     }
   };
@@ -257,7 +278,8 @@ export default function OverlayApp() {
     setPopups([]);
     redrawInk();
   };
-  const closePopup = (id) => setPopups((prev) => prev.filter(p => p.id !== id));
+  const closePopup = (id) =>
+    setPopups((prev) => prev.filter((p) => p.id !== id));
 
   return (
     <div
@@ -268,7 +290,7 @@ export default function OverlayApp() {
         width: pageSize.width,
         height: pageSize.height,
         zIndex: 2147483647,
-        pointerEvents: "none" // page remains clickable
+        pointerEvents: "none", // page remains clickable
       }}
     >
       <canvas
@@ -294,21 +316,40 @@ export default function OverlayApp() {
           pointerEvents: "auto",
           display: "flex",
           gap: 8,
-          alignItems: "center"
+          alignItems: "center",
         }}
       >
-        <span>Hold <b>⌘+Ctrl</b> and drag {hotkeyReady ? "(ready)" : ""}</span>
+        <span>
+          Hold <b>⌘+Ctrl</b> and drag {hotkeyReady ? "(ready)" : ""}
+        </span>
         <button onClick={undo}>Undo</button>
         <button onClick={clearAll}>Clear</button>
       </div>
 
       {/* One popup per lasso */}
       {popups.map((p) => (
-        <PopupBubble key={p.id} x={p.x} y={p.y} onClose={() => closePopup(p.id)}>
+        <PopupBubble
+          key={p.id}
+          x={p.x}
+          y={p.y}
+          onClose={() => closePopup(p.id)}
+        >
           <div style={{ marginBottom: 6 }}>
-            <div><b>Lasso ID:</b> {p.id.slice(0, 8)}</div>
-            <div><b>Vertices:</b> {polysRef.current.find(poly => poly.id === p.id)?.pts.length ?? 0}</div>
-            <div><b>BBox:</b> {Math.round(p.content.bbox.w)}×{Math.round(p.content.bbox.h)} px</div>
+            <div>
+              <b>Lasso ID:</b> {p.id.slice(0, 8)}
+            </div>
+            <div>
+              <b>Vertices:</b>{" "}
+              {polysRef.current.find((poly) => poly.id === p.id)?.pts.length ??
+                0}
+            </div>
+            <div>
+              <b>BBox:</b> {Math.round(p.content.bbox.w)}×
+              {Math.round(p.content.bbox.h)} px
+            </div>
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <b>Text:</b> {p.content.text || <i>No text detected</i>}
           </div>
           <div style={{ fontSize: 12, color: "#555" }}>
             This popup is independent — you can render per-lasso actions.
