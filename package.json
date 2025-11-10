@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run build:popup && npm run build:content && npm run copy:files",
+    "build": "vite build && cp manifest.json dist/ && mkdir -p dist/icons && cp -R public/icons/. dist/icons/ || true",
     "build:popup": "vite build",
     "build:content": "vite build --config vite.content.config.js",
     "copy:files": "cp src/background.js dist/ && cp public/manifest.json dist/ && cp public/icon.png dist/",

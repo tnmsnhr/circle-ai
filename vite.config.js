@@ -1,16 +1,20 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+// vite.config.js
+import { defineConfig } from "vite";
 
 export default defineConfig({
-  plugins: [react()],
   build: {
-    outDir: 'dist',
+    outDir: "dist",
+    emptyOutDir: true,
     rollupOptions: {
-      input: 'index.html'
+      input: {
+        content: "src/content-script.jsx", // 👈 must match the filename above
+      },
+      output: {
+        entryFileNames: (chunk) =>
+          chunk.name === "content" ? "content-script.js" : "[name].js", // 👈 forces dist/content-script.js
+        assetFileNames: "assets/[name][extname]",
+        chunkFileNames: "assets/[name].js",
+      },
     },
-    emptyOutDir: false
   },
-  server: {
-    port: 3000
-  }
 });

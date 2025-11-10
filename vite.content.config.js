@@ -6,10 +6,10 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     lib: {
-      entry: 'src/contentScript.jsx',
+      entry: 'src/content-script.jsx',
       name: 'contentScript',
       formats: ['iife'],
-      fileName: () => 'contentScript.js'
+      fileName: () => 'content-script.js'
     },
     rollupOptions: {
       output: {

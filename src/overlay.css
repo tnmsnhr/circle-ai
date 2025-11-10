@@ -1,0 +1,49 @@
+:host {
+  all: initial;
+}
+
+.draw-root {
+  position: absolute;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;              /* ✅ page stays interactive */
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+.draw-root.meta-active {
+  pointer-events: auto;              /* ✅ only capture while Cmd held */
+  cursor: crosshair;
+}
+
+/* The wrapper that listens to pointer events when meta-active */
+.draw-canvas-wrap {
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* Prevent touch panning/zoom interfering while drawing on touch devices */
+  touch-action: none;
+}
+
+/* ✅ Drawn strokes never block clicks to the page below */
+.draw-canvas-wrap svg path {
+  pointer-events: none;
+}
+
+/* Toolbar remains clickable regardless */
+.draw-toolbar {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  padding: 8px 10px;
+  background: rgba(20,20,20,0.8);
+  color: #fff;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.2;
+  user-select: none;
+  pointer-events: auto;
+}
+
+.color-swatch { /* ... unchanged ... */ }
+.width-chip { /* ... unchanged ... */ }
+.hint { margin-right: 8px; }
