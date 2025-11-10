@@ -1,23 +1,32 @@
-import React from "react";
+import React from "react"
+import "./popupBubble.css"
 
-export default function PopupBubble({ x, y, onClose, children }) {
+const PopupBubble = ({ x, y, onClose, children }) => {
+    const isDark = false
+    // const isDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
   return (
     <div
+    className="popupContainer"
       style={{
         position: "absolute",
         left: x,
         top: y,
         zIndex: 2147483647,
-        pointerEvents: "auto",            // ✅ clickable
-        background: "white",
-        border: "1px solid rgba(0,0,0,0.12)",
-        borderRadius: 10,
-        boxShadow:
-          "0 6px 16px rgba(0,0,0,0.2), 0 1px 3px rgba(0,0,0,0.08)",
+        pointerEvents: "auto",          
+         background: isDark ? "rgba(22,22,22,0.55)" : "rgba(255,255,255,0.55)",
+        backdropFilter: "blur(16px) saturate(160%) contrast(105%)",
+        WebkitBackdropFilter: "blur(16px) saturate(160%) contrast(105%)",
+        border: isDark
+        ? "1px solid rgba(255,255,255,0.12)"
+        : "1px solid rgba(0,0,0,0.10)",
+      borderRadius: 12,
+      boxShadow: isDark
+        ? "0 8px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)"
+        : "0 8px 30px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.6)",
         padding: 10,
         minWidth: 220,
         maxWidth: 320,
-        color: "#111",
+        color: isDark ? "#f5f5f5" : "#111",
         font: "13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
       }}
     >
@@ -71,3 +80,5 @@ export default function PopupBubble({ x, y, onClose, children }) {
     </div>
   );
 }
+
+export default PopupBubble
