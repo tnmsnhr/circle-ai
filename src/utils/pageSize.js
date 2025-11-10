@@ -1,18 +1,9 @@
-export function getPageSize() {
+const getPageSize = ()=>{
   const el = document.documentElement;
-  const body = document.body;
-
-  const width = Math.max(
-    el.scrollWidth, el.offsetWidth, el.clientWidth,
-    body ? body.scrollWidth : 0,
-    body ? body.offsetWidth : 0
-  );
-
-  const height = Math.max(
-    el.scrollHeight, el.offsetHeight, el.clientHeight,
-    body ? body.scrollHeight : 0,
-    body ? body.offsetHeight : 0
-  );
-
-  return { width, height };
+  const b = document.body || {};
+  const w = Math.max(el.scrollWidth, el.offsetWidth, el.clientWidth, b.scrollWidth || 0, b.offsetWidth || 0);
+  const h = Math.max(el.scrollHeight, el.offsetHeight, el.clientHeight, b.scrollHeight || 0, b.offsetHeight || 0);
+  return { width: w, height: h };
 }
+
+export default getPageSize

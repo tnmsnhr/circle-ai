@@ -1,28 +1,28 @@
 // OverlayLasso.jsx
 import React, { useEffect, useRef, useState } from "react";
 
+import PopupBubble from "./components/PopupBubble.jsx";
+import {getPageSize, uid, bboxOf} from "./utils"
+
 const isHotkey = (e) => e.metaKey
 
-// doc size
-function getPageSize() {
-  const el = document.documentElement;
-  const b = document.body || {};
-  const w = Math.max(el.scrollWidth, el.offsetWidth, el.clientWidth, b.scrollWidth || 0, b.offsetWidth || 0);
-  const h = Math.max(el.scrollHeight, el.offsetHeight, el.clientHeight, b.scrollHeight || 0, b.offsetHeight || 0);
-  return { width: w, height: h };
-}
-
 export default function OverlayApp() {
-  const [hotkeyReady, setHotkeyReady] = useState(false); // Cmd+Ctrl hint
+   const [hotkeyReady, setHotkeyReady] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [pageSize, setPageSize] = useState(getPageSize());
 
-  const liveCanvasRef = useRef(null);  // live (rubber-band) layer
-  const inkCanvasRef  = useRef(null);  // committed shapes layer
-  const pointsRef     = useRef([]);    // current polygon points [{x,y}]
-  const polysRef      = useRef([]);    // committed polygons [[{x,y},...], ...]
+  // Multiple popups, one per polygon: [{ id, x, y, content }]
+  const [popups, setPopups] = useState([]);
 
-  // resize canvases to doc with DPR
+  const liveCanvasRef = useRef(null);
+  const inkCanvasRef  = useRef(null);
+  const pointsRef     = useRef([]);                 // current live points
+  const polysRef      = useRef([]);                 // committed: [{ id, pts }]
+
+  const liveCtx = () => liveCanvasRef.current?.getContext("2d");
+  const inkCtx  = () =>  inkCanvasRef.current?.getContext("2d");
+
+  // Size canvases to doc (with DPR) and redraw
   const resizeCanvases = () => {
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     const { width, height } = getPageSize();
@@ -32,7 +32,7 @@ export default function OverlayApp() {
       if (!c) continue;
       c.style.width = `${width}px`;
       c.style.height = `${height}px`;
-      c.width = Math.ceil(width * dpr);
+      c.width  = Math.ceil(width * dpr);
       c.height = Math.ceil(height * dpr);
       const ctx = c.getContext("2d");
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -40,15 +40,14 @@ export default function OverlayApp() {
       ctx.lineCap = "round";
     }
 
-    // clear & redraw
+    // Clear live and redraw ink
     liveCtx()?.clearRect(0, 0, width, height);
     redrawInk();
+
+    // Re-clamp all popups within page bounds
+    setPopups((prev) => prev.map(p => clampPopup(p, width, height)));
   };
 
-  const liveCtx = () => liveCanvasRef.current?.getContext("2d");
-  const inkCtx  = () =>  inkCanvasRef.current?.getContext("2d");
-
-  // full redraw of committed polys
   const redrawInk = () => {
     const ctx = inkCtx();
     if (!ctx) return;
@@ -57,7 +56,7 @@ export default function OverlayApp() {
     ctx.lineWidth = 2;
     ctx.strokeStyle = "#22c55e";
     ctx.fillStyle = "rgba(34,197,94,0.12)";
-    for (const pts of polysRef.current) {
+    for (const { pts } of polysRef.current) {
       if (pts.length < 2) continue;
       ctx.beginPath();
       ctx.moveTo(pts[0].x, pts[0].y);
@@ -89,7 +88,7 @@ export default function OverlayApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // hotkey hint only (Cmd+Ctrl)
+  // hotkey hint (Cmd+Ctrl) — visual only
   useEffect(() => {
     const down = (e) => setHotkeyReady(isHotkey(e));
     const up   = () => setHotkeyReady(false);
@@ -106,7 +105,7 @@ export default function OverlayApp() {
     };
   }, []);
 
-  // pointer handlers (capture phase)
+  // pointer handlers
   useEffect(() => {
     const isCombo = (e) => isHotkey(e);
 
@@ -122,8 +121,9 @@ export default function OverlayApp() {
 
     const move = (e) => {
       if (!isDrawing) return;
-      if (!isCombo(e)) return finish(false); // commit even if combo released mid-stroke
       const pts = pointsRef.current;
+      // commit if combo released mid-stroke
+      if (!(isHotkey(e))) return finishCommit();
       const last = pts[pts.length - 1];
       const x = e.pageX, y = e.pageY;
       const dx = x - last.x, dy = y - last.y;
@@ -136,29 +136,35 @@ export default function OverlayApp() {
     const end = (e) => {
       if (!isDrawing) return;
       if (e.type === "pointerup" && e.button !== 0) return;
-      finish(true);
+      finishCommit();
       e.preventDefault();
     };
 
-    const finish = (fromPointer = true) => {
-      // commit polygon if it has enough points
-      if (pointsRef.current.length >= 3) {
-        // close polygon visually
-        const pts = pointsRef.current.slice();
-        polysRef.current.push(pts);
+    const esc = (e) => {
+      if (e.key !== "Escape") return;
+      if (!isDrawing) return;
+      cancelLive();
+    };
+
+    const finishCommit = () => {
+      const pts = pointsRef.current;
+      setIsDrawing(false);
+      if (pts.length >= 3) {
+        const id = uid();
+        // 1) commit polygon
+        polysRef.current.push({ id, pts: pts.slice() });
         redrawInk();
+        // 2) create popup for this polygon
+        const box = bboxOf(pts);
+        setPopups((prev) => [...prev, placePopupForBox(id, box, pageSize)]);
       }
       // clear live
-      setIsDrawing(false);
       pointsRef.current = [];
       const l = liveCtx();
       if (l) l.clearRect(0, 0, pageSize.width, pageSize.height);
     };
 
-    const esc = (e) => {
-      if (e.key !== "Escape") return;
-      // cancel current lasso without commit
-      if (!isDrawing) return;
+    const cancelLive = () => {
       setIsDrawing(false);
       pointsRef.current = [];
       const l = liveCtx();
@@ -180,7 +186,7 @@ export default function OverlayApp() {
     };
   }, [isDrawing, pageSize.width, pageSize.height]);
 
-  // live rubber-band
+  // live rubber band
   const drawLive = () => {
     const ctx = liveCtx();
     if (!ctx) return;
@@ -192,7 +198,6 @@ export default function OverlayApp() {
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pts[0].y);
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    // show “closing” edge
     if (pts.length > 1) ctx.lineTo(pts[0].x, pts[0].y);
 
     ctx.strokeStyle = "#00b3ff";
@@ -202,26 +207,57 @@ export default function OverlayApp() {
     ctx.setLineDash([]);
   };
 
+  // popup placement helpers
+  const placePopupForBox = (id, box, page) => {
+    const margin = 8;
+    const estW = 260;
+    const estH = 160;
+
+    // default: right side, top-aligned
+    let x = box.maxX + margin;
+    let y = box.minY;
+
+    // if overflow right, flip to left
+    if (x + estW > page.width) x = Math.max(0, box.minX - estW - margin);
+    // clamp Y within page
+    if (y + estH > page.height) y = Math.max(0, page.height - estH - margin);
+    if (y < 0) y = 0;
+
+    return {
+      id,
+      x,
+      y,
+      content: {
+        vertices: Math.max(0, Math.round(box.w + box.h) /* demo */),
+        bbox: box
+      }
+    };
+  };
+
+  const clampPopup = (p, pageW, pageH) => {
+    const estW = 260, estH = 160, m = 8;
+    let x = p.x, y = p.y;
+    if (x + estW > pageW) x = pageW - estW - m;
+    if (y + estH > pageH) y = pageH - estH - m;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    return { ...p, x, y };
+  };
+
   // actions
-  const onUndo = () => {
-    polysRef.current.pop();
-    redrawInk();
+  const undo = () => {
+    const last = polysRef.current.pop();
+    if (last) {
+      setPopups((prev) => prev.filter(p => p.id !== last.id));
+      redrawInk();
+    }
   };
-  const onClear = () => {
-    polysRef.current = { current: [] }; // reset ref safely
-    polysRef.current = { current: [] }; // ensure actual array
-  };
-
-  // fix: proper clear implementation
   const clearAll = () => {
-    polysRef.current = { current: [] }; // wrong pattern; use below
-  };
-
-  // Correct clear:
-  const clearInk = () => {
     polysRef.current.length = 0;
+    setPopups([]);
     redrawInk();
   };
+  const closePopup = (id) => setPopups((prev) => prev.filter(p => p.id !== id));
 
   return (
     <div
@@ -232,7 +268,7 @@ export default function OverlayApp() {
         width: pageSize.width,
         height: pageSize.height,
         zIndex: 2147483647,
-        pointerEvents: "none"  // click-through always
+        pointerEvents: "none" // page remains clickable
       }}
     >
       <canvas
@@ -261,10 +297,24 @@ export default function OverlayApp() {
           alignItems: "center"
         }}
       >
-        <span>Hold <b>⌘+Ctrl</b> and drag to lasso {hotkeyReady ? "(ready)" : ""}</span>
-        <button onClick={() => { polysRef.current.pop(); redrawInk(); }}>Undo</button>
-        <button onClick={() => { polysRef.current.length = 0; redrawInk(); }}>Clear</button>
+        <span>Hold <b>⌘+Ctrl</b> and drag {hotkeyReady ? "(ready)" : ""}</span>
+        <button onClick={undo}>Undo</button>
+        <button onClick={clearAll}>Clear</button>
       </div>
+
+      {/* One popup per lasso */}
+      {popups.map((p) => (
+        <PopupBubble key={p.id} x={p.x} y={p.y} onClose={() => closePopup(p.id)}>
+          <div style={{ marginBottom: 6 }}>
+            <div><b>Lasso ID:</b> {p.id.slice(0, 8)}</div>
+            <div><b>Vertices:</b> {polysRef.current.find(poly => poly.id === p.id)?.pts.length ?? 0}</div>
+            <div><b>BBox:</b> {Math.round(p.content.bbox.w)}×{Math.round(p.content.bbox.h)} px</div>
+          </div>
+          <div style={{ fontSize: 12, color: "#555" }}>
+            This popup is independent — you can render per-lasso actions.
+          </div>
+        </PopupBubble>
+      ))}
     </div>
   );
 }
