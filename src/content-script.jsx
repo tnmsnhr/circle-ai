@@ -11,7 +11,7 @@ import "./overlay.css";
   // Avoid duplicate mounts
   if (window.__DRAW_ON_WEB_MOUNTED__) return;
   window.__DRAW_ON_WEB_MOUNTED__ = true;
-  console.log("OverlayApp")
+  console.log("OverlayApp");
 
   const host = document.createElement("div");
   host.setAttribute("id", "draw-on-web-root-host");
@@ -38,8 +38,8 @@ import "./overlay.css";
 
   // Move our built CSS into shadow by cloning <style> created by Vite in document <head>.
   // (Vite will have appended a <style> tag for overlay.css; copy its text here to isolate.)
-  const viteStyle = [...document.querySelectorAll("style")].find(s =>
-    s.textContent && s.textContent.includes(".draw-root")
+  const viteStyle = [...document.querySelectorAll("style")].find(
+    (s) => s.textContent && s.textContent.includes(".draw-root")
   );
   if (viteStyle) {
     style.textContent = viteStyle.textContent;

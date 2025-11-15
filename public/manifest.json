@@ -3,7 +3,7 @@
   "name": "Draw on Any Page (React)",
   "version": "1.0.0",
   "description": "Hold Cmd (Meta) to freehand draw on any webpage. Strokes scroll with the page.",
-  "permissions": [],
+  "permissions": ["tabs", "activeTab", "scripting", "offscreen"],
   "host_permissions": ["<all_urls>"],
   "content_scripts": [
     {
@@ -16,5 +16,7 @@
     "default_title": "Draw on Any Page",
     "default_icon": "icon.png",
     "default_popup": "popup.html"
-  }
+  },
+  "background": { "service_worker": "background.js" }
+
 }
