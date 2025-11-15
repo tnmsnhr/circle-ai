@@ -50,4 +50,10 @@ import "./overlay.css";
 
   // Ensure the host follows the document size by pinning at 0,0.
   // The inner component sizes to full page and will scroll naturally with the document.
+  chrome.runtime.sendMessage({ type: "OFFSCREEN_PING" }, (res) => {
+    console.log("[circle-ai] offscreen pong:", res);
+  });
+  chrome.runtime.sendMessage({ type: "CAPTURE_TEST" }, (res) => {
+    console.log("[circle-ai] capture test:", res);
+  });
 })();

@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import PopupBubble from "./components/PopupBubble.jsx";
-import { getPageSize, uid, bboxOf, extractTextFromPolygon } from "./utils";
+import { getPageSize, uid, bboxOf } from "./utils";
 
 const isHotkey = (e) => e.metaKey;
 
@@ -160,9 +160,6 @@ export default function OverlayApp() {
         // 1) commit polygon
         polysRef.current.push({ id, pts: pts.slice() });
         redrawInk();
-        const { text } = extractTextFromPolygon(pts);
-        const snippet =
-          text.length > 220 ? text.slice(0, 220).trimEnd() + "…" : text;
         // 2) create popup for this polygon
         const box = bboxOf(pts);
         const placed = placePopupForBox(id, box, pageSize);
@@ -172,7 +169,7 @@ export default function OverlayApp() {
           ...prev,
           {
             ...placed,
-            content: { bbox: box, text: snippet },
+            content: { bbox: box, text: "dummy text" },
           },
         ]);
       }
