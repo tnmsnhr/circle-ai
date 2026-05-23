@@ -415,7 +415,7 @@ export default function OverlayApp({ toolbarMount }) {
           addExpandedPopup(id);
         }
 
-        runSelectionExtraction(clientPts)
+        runSelectionExtraction(clientPts, id)
           .then((extracted) => {
             const preview =
               extracted.focus.text?.slice(0, 280) ||

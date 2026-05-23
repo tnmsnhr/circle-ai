@@ -81,37 +81,30 @@ export function buildAiPayload(extracted: ExtractedContext): AiSelectionPayload 
   };
 }
 
-/** Log payload for devtools without dumping megabytes of base64. */
-export function logAiPayload(payload: AiSelectionPayload, selectionId?: string): void {
-  const tag = selectionId
-    ? `[syncle] AI payload (${selectionId.slice(0, 8)})`
+/** Console-log the payload we send to AI (page DevTools → Console). */
+export function logAiPayload(
+  payload: AiSelectionPayload,
+  selectionId?: string
+): void {
+  const label = selectionId
+    ? `[syncle] AI payload · ${selectionId.slice(0, 8)}`
     : "[syncle] AI payload";
 
-  const summary = {
+  const forConsole = {
     instruction: payload.instruction,
     userSelection: {
-      text: payload.userSelection.text,
-      elementTypes: payload.userSelection.elementTypes,
-      selectionRect: payload.userSelection.selectionRect,
-      hasVisual: payload.userSelection.hasVisual,
+      ...payload.userSelection,
       cropImageBase64: payload.userSelection.cropImageBase64
         ? `<JPEG base64, ${payload.userSelection.cropImageBase64.length} chars>`
         : undefined,
     },
     surroundingContext: payload.surroundingContext,
-    media: {
-      imageCount: payload.media.images?.length ?? 0,
-      svgCount: payload.media.svg?.length ?? 0,
-      hasPdf: Boolean(payload.media.pdf),
-    },
+    media: payload.media,
     page: payload.page,
     meta: payload.meta,
   };
 
-  console.group(tag);
-  console.log("USER SELECTED (send this as the focus):", payload.userSelection.text);
-  console.log("SURROUNDING CONTEXT (background only):", payload.surroundingContext);
-  console.log("Full payload (image omitted):", summary);
-  console.log("Raw payload for API:", payload);
-  console.groupEnd();
+  console.log(label, forConsole);
+  console.log(`${label} · USER SELECTED`, payload.userSelection.text);
+  console.log(`${label} · SURROUNDING CONTEXT`, payload.surroundingContext);
 }

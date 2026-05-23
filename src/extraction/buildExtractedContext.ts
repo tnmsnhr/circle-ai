@@ -126,9 +126,7 @@ export async function buildExtractedContext(
     },
   };
 
-  const aiPayload = buildAiPayload(extracted);
-  logAiPayload(aiPayload);
-  extracted.aiPayload = aiPayload;
+  extracted.aiPayload = buildAiPayload(extracted);
 
   return extracted;
 }

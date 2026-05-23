@@ -6,7 +6,12 @@ import {
   LASSO_THEMES,
 } from "./settings.js";
 import { loadSession } from "../auth/session.js";
-import { signInWithGoogle, signOut } from "../auth/googleSignIn.js";
+import {
+  signInWithGoogle,
+  signOut,
+  trySilentGoogleSignIn,
+} from "../auth/googleSignIn.js";
+import { isCloudSignInAvailable } from "../auth/oauthConfig.js";
 
 export default function PopupApp() {
   const [theme, setTheme] = useState("system");
@@ -17,17 +22,32 @@ export default function PopupApp() {
   const [ready, setReady] = useState(false);
   const [accountEmail, setAccountEmail] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
+  const [signInAvailable, setSignInAvailable] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    Promise.all([loadSettings(), loadSession()]).then(([s, session]) => {
-      setTheme(s.theme);
-      setLassoTheme(s.lassoTheme);
-      setEnabled(s.enabled);
-      setAutoCollapse(s.autoCollapse !== false);
-      setAccountEmail(session?.user?.email ?? null);
-      applyThemeToDocument(s.theme);
-      setReady(true);
-    });
+    Promise.all([
+      loadSettings(),
+      loadSession(),
+      trySilentGoogleSignIn(),
+      isCloudSignInAvailable(),
+    ])
+      .then(([s, session, silent, cloudAuth]) => {
+        const active = session?.token ? session : silent;
+        setSignInAvailable(cloudAuth);
+        setTheme(s.theme);
+        setLassoTheme(s.lassoTheme);
+        setEnabled(s.enabled);
+        setAutoCollapse(s.autoCollapse !== false);
+        setAccountEmail(active?.user?.email ?? null);
+        applyThemeToDocument(s.theme);
+        setReady(true);
+      })
+      .catch((err) => {
+        console.error("[syncle popup]", err);
+        setLoadError(err?.message || "Failed to load settings");
+        setReady(true);
+      });
   }, []);
 
   useEffect(() => {
@@ -111,6 +131,18 @@ export default function PopupApp() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="popup-app">
+        <h1>Syncle</h1>
+        <p className="hint" style={{ color: "#b91c1c" }}>
+          {loadError}
+        </p>
+        <p className="hint">Reload the extension from chrome://extensions</p>
+      </div>
+    );
+  }
+
   return (
     <div className="popup-app">
       <h1>Syncle</h1>
@@ -119,13 +151,13 @@ export default function PopupApp() {
       <section className="popup-section">
         <h2>Account</h2>
         <p className="hint section-hint">
-          Sign in to register page context with syncle-services (localhost:3001
-          by default).
+          Uses your Chrome Google account. Sign in to sync selections with
+          Syncle cloud.
         </p>
         {accountEmail ? (
           <p className="account-email">{accountEmail}</p>
         ) : (
-          <p className="hint">Not signed in — extraction works locally only.</p>
+          <p className="hint">Not signed in — lasso still works on the page.</p>
         )}
         <div className="account-actions">
           {accountEmail ? (
@@ -137,7 +169,7 @@ export default function PopupApp() {
             >
               Sign out
             </button>
-          ) : (
+          ) : signInAvailable ? (
             <button
               type="button"
               className="btn-primary"
@@ -146,6 +178,11 @@ export default function PopupApp() {
             >
               {authBusy ? "Signing in…" : "Sign in with Google"}
             </button>
+          ) : (
+            <p className="hint">
+              Cannot reach Syncle server or Google OAuth is not set up in
+              syncle-services/.env (see syncle-services/docs/AUTH.md).
+            </p>
           )}
         </div>
       </section>

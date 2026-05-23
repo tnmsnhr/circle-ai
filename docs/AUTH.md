@@ -1,42 +1,41 @@
-# Google sign-in (Syncle extension + services)
+# Google sign-in
 
-## 1. Google Cloud Console
+Users click **Sign in with Google** once. OAuth credentials live on **syncle-services** only — nothing to paste in the extension.
 
-1. Create an OAuth client of type **Chrome extension**.
-2. Set the extension ID (from `chrome://extensions` → Syncle → ID).
-3. Copy the **client ID** into `public/manifest.json` → `oauth2.client_id` (replace the placeholder).
+## Server setup (one time)
 
-## 2. syncle-services
+1. [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Credentials**
+2. Create **OAuth client ID** → type **Web application**
+3. **Authorized redirect URIs:** `http://localhost:3001/auth/google/callback`
+4. Copy Client ID and Client secret
 
 ```bash
 cd syncle-services
 cp .env.example .env
-```
+# Fill GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, JWT_SECRET
 
-Set in `.env`:
-
-- `GOOGLE_CLIENT_ID` — same client ID as the extension
-- `JWT_SECRET` — random string for session tokens
-- `AUTH_REQUIRED=false` — local dev without forcing auth on every route
-
-```bash
-npm install
 npm run dev
 ```
 
-## 3. Extension
+5. Build & reload the extension:
 
-1. `npm run build` and reload the extension.
-2. Open the popup → **Sign in with Google**.
-3. Draw a lasso — when signed in, context registers to `http://localhost:3001`.
-
-## Flow
-
-```
-Popup → chrome.identity.getAuthToken
-     → POST /auth/google { accessToken }
-     → JWT stored in chrome.storage.local
-Lasso → optimize payload → POST /context/page/register or /context/selection/register
+```bash
+cd syncle-ui
+npm run build
+# chrome://extensions → Reload Syncle (load from dist/)
 ```
 
-Set `AUTH_REQUIRED=true` on the server when you want all context/chat routes to require `Authorization: Bearer <jwt>`.
+## User flow
+
+1. Open popup → if already signed in before, session restores automatically.
+2. Otherwise click **Sign in with Google** → Google account picker → back to extension, signed in.
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| “Start syncle-services…” | Server not running or `.env` missing Google keys |
+| redirect_uri_mismatch | Add exact callback URL in Google Cloud |
+| Popup can’t reach server | Default API URL is `http://localhost:3001` |
+
+Optional: `VITE_GOOGLE_CLIENT_ID` in `syncle-ui/.env` enables manifest `oauth2` for `getAuthToken` — not required with the server OAuth flow.

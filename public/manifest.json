@@ -4,10 +4,6 @@
   "version": "1.0.0",
   "description": "Hold ⌘ or Ctrl and lasso areas on any webpage. Selections and chat bubbles stay pinned while you scroll.",
   "permissions": ["tabs", "activeTab", "scripting", "offscreen", "storage", "identity"],
-  "oauth2": {
-    "client_id": "REPLACE_WITH_CHROME_EXTENSION_OAUTH_CLIENT_ID.apps.googleusercontent.com",
-    "scopes": ["openid", "email", "profile"]
-  },
   "host_permissions": ["<all_urls>"],
   "content_scripts": [
     {
