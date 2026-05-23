@@ -23,7 +23,6 @@ import {
 } from "./lassoThemes";
 import {
   SCROLL_COLLAPSE_THRESHOLD_PX,
-  SCROLL_SETTLE_BEFORE_EXPAND_MS,
   BUBBLE_MORPH_MS,
   attachScrollBubbleController,
 } from "./scrollBubble";
@@ -47,7 +46,6 @@ export {
   DEFAULT_LASSO_THEME_ID,
   getLassoTheme,
   SCROLL_COLLAPSE_THRESHOLD_PX,
-  SCROLL_SETTLE_BEFORE_EXPAND_MS,
   BUBBLE_MORPH_MS,
   attachScrollBubbleController,
 };

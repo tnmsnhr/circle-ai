@@ -37,14 +37,27 @@ export default function OverlayApp({ toolbarMount }) {
   const [popups, setPopups] = useState([]);
   const [popupsCompact, setPopupsCompact] = useState(false);
   const [bubbleMorph, setBubbleMorph] = useState(null);
-  const [pinnedPopupId, setPinnedPopupId] = useState(null);
+  const [morphPopupId, setMorphPopupId] = useState(null);
+  const [expandedPopupIds, setExpandedPopupIds] = useState(() => new Set());
   const popupsCompactRef = useRef(false);
+  const expandedPopupIdsRef = useRef(new Set());
   const bubbleMorphRef = useRef(null);
-  const pinnedPopupIdRef = useRef(null);
   const morphTimerRef = useRef(null);
+  const resetScrollAccumulatedRef = useRef(() => {});
   popupsCompactRef.current = popupsCompact;
+  expandedPopupIdsRef.current = expandedPopupIds;
   bubbleMorphRef.current = bubbleMorph;
-  pinnedPopupIdRef.current = pinnedPopupId;
+
+  const addExpandedPopup = (id) => {
+    setExpandedPopupIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
+
+  const clearExpandedPopups = () => setExpandedPopupIds(new Set());
 
   const popupsCountRef = useRef(0);
   popupsCountRef.current = popups.length;
@@ -162,16 +175,32 @@ export default function OverlayApp({ toolbarMount }) {
   };
 
   const collapseBubbles = () => {
-    if (popupsCompactRef.current) return;
-    startMorph("collapse", () => setPopupsCompact(true));
+    const fullyCompact =
+      popupsCompactRef.current && expandedPopupIdsRef.current.size === 0;
+    if (fullyCompact) return;
+
+    startMorph("collapse", () => {
+      setPopupsCompact(true);
+      clearExpandedPopups();
+    });
   };
 
-  const expandBubbles = () => {
-    if (!popupsCompactRef.current && !bubbleMorphRef.current) return;
-    startMorph("expand", () => {
-      setPopupsCompact(false);
-      setPinnedPopupId(null);
+  /** Expand one selection; other open bubbles stay open until scroll collapses all. */
+  const expandPopup = (id) => {
+    if (expandedPopupIds.has(id)) return;
+    resetScrollAccumulatedRef.current();
+    if (morphTimerRef.current) clearTimeout(morphTimerRef.current);
+    setMorphPopupId(id);
+    setBubbleMorph("expand");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => addExpandedPopup(id));
     });
+    morphTimerRef.current = setTimeout(() => {
+      setBubbleMorph(null);
+      setMorphPopupId(null);
+      morphTimerRef.current = null;
+      bump();
+    }, BUBBLE_MORPH_MS);
   };
 
   const cancelLive = () => {
@@ -237,17 +266,22 @@ export default function OverlayApp({ toolbarMount }) {
     if (popups.length === 0) {
       setPopupsCompact(false);
       setBubbleMorph(null);
-      setPinnedPopupId(null);
+      setMorphPopupId(null);
+      clearExpandedPopups();
       if (morphTimerRef.current) clearTimeout(morphTimerRef.current);
       return;
     }
 
-    return attachScrollBubbleController({
+    const cleanup = attachScrollBubbleController({
       onCollapse: collapseBubbles,
-      onExpand: expandBubbles,
-      isPinned: () => Boolean(pinnedPopupIdRef.current),
-      isCollapsed: () => popupsCompactRef.current,
+      isFullyCompact: () =>
+        popupsCompactRef.current && expandedPopupIdsRef.current.size === 0,
     });
+    resetScrollAccumulatedRef.current = cleanup.resetAccumulated;
+    return () => {
+      cleanup.removeListener();
+      resetScrollAccumulatedRef.current = () => {};
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [popups.length]);
 
@@ -430,6 +464,12 @@ export default function OverlayApp({ toolbarMount }) {
     if (last) {
       anchorsRef.current.delete(last.id);
       setPopups((prev) => prev.filter((p) => p.id !== last.id));
+      setExpandedPopupIds((prev) => {
+        if (!prev.has(last.id)) return prev;
+        const next = new Set(prev);
+        next.delete(last.id);
+        return next;
+      });
       redrawInk();
       bump();
     }
@@ -439,13 +479,25 @@ export default function OverlayApp({ toolbarMount }) {
     polysRef.current.length = 0;
     anchorsRef.current.clear();
     setPopups([]);
+    clearExpandedPopups();
     redrawInk();
     bump();
   };
 
   const closePopup = (id) => {
     setPopups((prev) => prev.filter((p) => p.id !== id));
-    if (pinnedPopupId === id) setPinnedPopupId(null);
+    setExpandedPopupIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    if (polysRef.current.length === 0) {
+      setPopupsCompact(false);
+      setBubbleMorph(null);
+      setMorphPopupId(null);
+      clearExpandedPopups();
+    }
   };
 
   const popupNodes = popups.map((p) => {
@@ -456,8 +508,13 @@ export default function OverlayApp({ toolbarMount }) {
 
     const centroid = getSelectionCentroid(anchor, poly.offsets, poly.pts);
     const colors = lassoThemeRef.current;
-    const isCompact = popupsCompact && pinnedPopupId !== p.id;
-    const showMorph = Boolean(bubbleMorph);
+    const isCompact = popupsCompact && !expandedPopupIds.has(p.id);
+    const showMorph =
+      bubbleMorph === "collapse"
+        ? bubbleMorph
+        : bubbleMorph === "expand" && morphPopupId === p.id
+          ? "expand"
+          : null;
 
     const node = (
       <PopupBubble
@@ -471,13 +528,7 @@ export default function OverlayApp({ toolbarMount }) {
         accentColor={colors.border}
         fillColor={colors.fill}
         onClose={() => closePopup(p.id)}
-        onExpand={() => {
-          setPinnedPopupId(p.id);
-          setPopupsCompact(false);
-          setBubbleMorph(null);
-          if (morphTimerRef.current) clearTimeout(morphTimerRef.current);
-          bump();
-        }}
+        onExpand={() => expandPopup(p.id)}
       >
         <div style={{ marginBottom: 6 }}>
           <div>

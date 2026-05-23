@@ -1,44 +1,21 @@
 /** Scroll distance before chat bubbles collapse into chips. */
 export const SCROLL_COLLAPSE_THRESHOLD_PX = 100;
 
-/** No scroll activity for this long before bubbles expand again. */
-export const SCROLL_SETTLE_BEFORE_EXPAND_MS = 650;
-
 /** Duration of the one-shot collapse / expand morph. */
 export const BUBBLE_MORPH_MS = 360;
 
 /**
- * Track scroll deltas (window + nested scrollers) and drive collapse/expand.
- * Uses hysteresis: collapse only after threshold; expand only after a full settle.
+ * Collapse bubbles after scroll threshold. Expand only via user click on a chip.
+ * "Fully compact" = all chips, none manually expanded.
  */
-export function attachScrollBubbleController({
-  onCollapse,
-  onExpand,
-  isPinned,
-  isCollapsed,
-}) {
+export function attachScrollBubbleController({ onCollapse, isFullyCompact }) {
   const scrollPos = new WeakMap();
   let accumulated = 0;
   let lastWinX = window.scrollX;
   let lastWinY = window.scrollY;
-  let settleTimer = null;
-  let collapsedThisSession = false;
 
-  const clearSettle = () => {
-    if (settleTimer) {
-      clearTimeout(settleTimer);
-      settleTimer = null;
-    }
-  };
-
-  const scheduleExpandCheck = () => {
-    clearSettle();
-    settleTimer = setTimeout(() => {
-      if (!collapsedThisSession || isPinned()) return;
-      collapsedThisSession = false;
-      accumulated = 0;
-      onExpand();
-    }, SCROLL_SETTLE_BEFORE_EXPAND_MS);
+  const resetAccumulated = () => {
+    accumulated = 0;
   };
 
   const onScroll = (e) => {
@@ -68,20 +45,17 @@ export function attachScrollBubbleController({
 
     accumulated += delta;
 
-    if (!isCollapsed() && !isPinned() && accumulated >= SCROLL_COLLAPSE_THRESHOLD_PX) {
-      collapsedThisSession = true;
+    if (accumulated >= SCROLL_COLLAPSE_THRESHOLD_PX && !isFullyCompact()) {
       onCollapse();
-    }
-
-    if (isCollapsed() || collapsedThisSession) {
-      scheduleExpandCheck();
+      accumulated = 0;
     }
   };
 
   document.addEventListener("scroll", onScroll, { capture: true, passive: true });
 
-  return () => {
+  const removeListener = () => {
     document.removeEventListener("scroll", onScroll, true);
-    clearSettle();
   };
+
+  return { removeListener, resetAccumulated };
 }
