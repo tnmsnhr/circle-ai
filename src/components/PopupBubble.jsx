@@ -8,7 +8,7 @@ const PopupBubble = ({ x, y, onClose, children }) => {
     <div
     className="popupContainer"
       style={{
-        position: "absolute",
+        position: "fixed",
         left: x,
         top: y,
         zIndex: 2147483647,

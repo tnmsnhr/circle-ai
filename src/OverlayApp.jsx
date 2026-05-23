@@ -2,31 +2,48 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import PopupBubble from "./components/PopupBubble.jsx";
-import { getPageSize, uid, bboxOf } from "./utils";
+import {
+  uid,
+  bboxOf,
+  pickAnchor,
+  getViewportSize,
+  clientPointsFromAnchor,
+  clientPointFromAnchor,
+  offsetsFromClientPoints,
+} from "./utils";
 
 const isHotkey = (e) => e.metaKey;
 
 export default function OverlayApp() {
   const [hotkeyReady, setHotkeyReady] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [pageSize, setPageSize] = useState(getPageSize());
+  const [viewport, setViewport] = useState(getViewportSize());
+  const [, setFrame] = useState(0);
 
-  // Multiple popups, one per polygon: [{ id, x, y, content }]
   const [popups, setPopups] = useState([]);
 
   const liveCanvasRef = useRef(null);
   const inkCanvasRef = useRef(null);
-  const pointsRef = useRef([]); // current live points
-  const polysRef = useRef([]); // committed: [{ id, pts }]
+  /** @type {React.MutableRefObject<Array<{clientX:number,clientY:number,pageX:number,pageY:number}>>} */
+  const pointsRef = useRef([]);
+  /** @type {React.MutableRefObject<Array<{id:string,pts:Array<{x:number,y:number}>,offsets:Array<{dx:number,dy:number}>,anchor:Element}>>} */
+  const polysRef = useRef([]);
+  const anchorsRef = useRef(new Map());
 
   const liveCtx = () => liveCanvasRef.current?.getContext("2d");
   const inkCtx = () => inkCanvasRef.current?.getContext("2d");
 
-  // Size canvases to doc (with DPR) and redraw
+  const getAnchor = (id) => {
+    const a = anchorsRef.current.get(id);
+    return a?.isConnected ? a : null;
+  };
+
+  const bump = () => setFrame((n) => n + 1);
+
   const resizeCanvases = () => {
     const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const { width, height } = getPageSize();
-    setPageSize({ width, height });
+    const { width, height } = getViewportSize();
+    setViewport({ width, height });
 
     for (const c of [liveCanvasRef.current, inkCanvasRef.current]) {
       if (!c) continue;
@@ -40,31 +57,42 @@ export default function OverlayApp() {
       ctx.lineCap = "round";
     }
 
-    // Clear live and redraw ink
     liveCtx()?.clearRect(0, 0, width, height);
     redrawInk();
-
-    // Re-clamp all popups within page bounds
-    setPopups((prev) => prev.map((p) => clampPopup(p, width, height)));
   };
 
   const redrawInk = () => {
     const ctx = inkCtx();
     if (!ctx) return;
-    const { width, height } = pageSize;
+    const { width, height } = viewport;
     ctx.clearRect(0, 0, width, height);
     ctx.lineWidth = 2;
     ctx.strokeStyle = "#22c55e";
     ctx.fillStyle = "rgba(34,197,94,0.12)";
-    for (const { pts } of polysRef.current) {
-      if (pts.length < 2) continue;
+
+    for (const poly of polysRef.current) {
+      const anchor = getAnchor(poly.id) || poly.anchor;
+      const clientPts = clientPointsFromAnchor(
+        anchor,
+        poly.offsets,
+        poly.pts
+      );
+      if (!clientPts || clientPts.length < 2) continue;
+
       ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.moveTo(clientPts[0].x, clientPts[0].y);
+      for (let i = 1; i < clientPts.length; i++) {
+        ctx.lineTo(clientPts[i].x, clientPts[i].y);
+      }
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
     }
+  };
+
+  const syncFrame = () => {
+    redrawInk();
+    bump();
   };
 
   useEffect(() => {
@@ -72,21 +100,49 @@ export default function OverlayApp() {
     const ro = new ResizeObserver(resizeCanvases);
     ro.observe(document.documentElement);
 
+    let raf = 0;
+    const schedule = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        syncFrame();
+      });
+    };
+
     const onWinResize = () => {
       if (onWinResize._r) cancelAnimationFrame(onWinResize._r);
       onWinResize._r = requestAnimationFrame(resizeCanvases);
     };
+
+    document.addEventListener("scroll", schedule, { capture: true, passive: true });
     window.addEventListener("resize", onWinResize, { passive: true });
+    const vv = window.visualViewport;
+    vv?.addEventListener("scroll", schedule, { passive: true });
+    vv?.addEventListener("resize", schedule, { passive: true });
+
+    let active = true;
+    const loop = () => {
+      if (!active) return;
+      if (polysRef.current.length > 0 || pointsRef.current.length > 0) {
+        schedule();
+      }
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
 
     return () => {
+      active = false;
       ro.disconnect();
+      document.removeEventListener("scroll", schedule, true);
       window.removeEventListener("resize", onWinResize);
+      vv?.removeEventListener("scroll", schedule);
+      vv?.removeEventListener("resize", schedule);
       if (onWinResize._r) cancelAnimationFrame(onWinResize._r);
+      if (raf) cancelAnimationFrame(raf);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // hotkey hint (Cmd+Ctrl) — visual only
   useEffect(() => {
     const down = (e) => setHotkeyReady(isHotkey(e));
     const up = () => setHotkeyReady(false);
@@ -107,7 +163,6 @@ export default function OverlayApp() {
     };
   }, []);
 
-  // pointer handlers
   useEffect(() => {
     const isCombo = (e) => isHotkey(e);
 
@@ -116,23 +171,35 @@ export default function OverlayApp() {
       if (!isCombo(e)) return;
       if (e.button !== 0) return;
       setIsDrawing(true);
-      pointsRef.current = [{ x: e.pageX, y: e.pageY }];
+      pointsRef.current = [
+        {
+          clientX: e.clientX,
+          clientY: e.clientY,
+          pageX: e.pageX,
+          pageY: e.pageY,
+        },
+      ];
       drawLive();
       e.preventDefault();
     };
 
     const move = (e) => {
       if (!isDrawing) return;
-      const pts = pointsRef.current;
-      // commit if combo released mid-stroke
       if (!isHotkey(e)) return finishCommit();
+      const pts = pointsRef.current;
       const last = pts[pts.length - 1];
-      const x = e.pageX,
-        y = e.pageY;
-      const dx = x - last.x,
-        dy = y - last.y;
-      if (dx * dx + dy * dy < 2) return;
-      pts.push({ x, y });
+      if (
+        (e.clientX - last.clientX) ** 2 + (e.clientY - last.clientY) ** 2 <
+        2
+      ) {
+        return;
+      }
+      pts.push({
+        clientX: e.clientX,
+        clientY: e.clientY,
+        pageX: e.pageX,
+        pageY: e.pageY,
+      });
       drawLive();
       e.preventDefault();
     };
@@ -151,37 +218,57 @@ export default function OverlayApp() {
     };
 
     const finishCommit = () => {
-      const pts = pointsRef.current;
+      const points = pointsRef.current;
       setIsDrawing(false);
-      if (pts.length >= 3) {
-        const id = uid();
-        // 1) commit polygon
-        polysRef.current.push({ id, pts: pts.slice() });
-        redrawInk();
-        // 2) create popup for this polygon
-        const box = bboxOf(pts);
-        const placed = placePopupForBox(id, box, pageSize);
+      pointsRef.current = [];
 
-        // setPopups((prev) => [...prev, placePopupForBox(id, box, pageSize)]);
+      if (points.length >= 3) {
+        const id = uid();
+        const n = points.length;
+        let cx = 0,
+          cy = 0;
+        for (const p of points) {
+          cx += p.clientX;
+          cy += p.clientY;
+        }
+        cx /= n;
+        cy /= n;
+
+        const anchor = pickAnchor(cx, cy);
+        const clientPts = points.map((p) => ({
+          x: p.clientX,
+          y: p.clientY,
+        }));
+        const offsets = offsetsFromClientPoints(anchor, clientPts);
+        const pagePts = points.map((p) => ({ x: p.pageX, y: p.pageY }));
+
+        anchorsRef.current.set(id, anchor);
+        polysRef.current.push({ id, pts: pagePts, offsets, anchor });
+
+        redrawInk();
+
+        const box = bboxOf(clientPts);
+        const popupOffset = placePopupOffset(box, anchor, viewport);
         setPopups((prev) => [
           ...prev,
           {
-            ...placed,
-            content: { bbox: box, text: "dummy text" },
+            id,
+            popupOffset,
+            content: {
+              bbox: bboxOf(pagePts),
+              text: "dummy text",
+            },
           },
         ]);
       }
-      // clear live
-      pointsRef.current = [];
-      const l = liveCtx();
-      if (l) l.clearRect(0, 0, pageSize.width, pageSize.height);
+
+      liveCtx()?.clearRect(0, 0, viewport.width, viewport.height);
     };
 
     const cancelLive = () => {
       setIsDrawing(false);
       pointsRef.current = [];
-      const l = liveCtx();
-      if (l) l.clearRect(0, 0, pageSize.width, pageSize.height);
+      liveCtx()?.clearRect(0, 0, viewport.width, viewport.height);
     };
 
     window.addEventListener("pointerdown", start, { capture: true });
@@ -197,21 +284,24 @@ export default function OverlayApp() {
       window.removeEventListener("pointercancel", end, { capture: true });
       window.removeEventListener("keydown", esc, { capture: true });
     };
-  }, [isDrawing, pageSize.width, pageSize.height]);
+  }, [isDrawing, viewport.width, viewport.height]);
 
-  // live rubber band
   const drawLive = () => {
     const ctx = liveCtx();
     if (!ctx) return;
-    const { width, height } = pageSize;
+    const { width, height } = viewport;
     ctx.clearRect(0, 0, width, height);
     const pts = pointsRef.current;
-    if (!pts.length) return;
+    if (pts.length < 1) return;
 
     ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    if (pts.length > 1) ctx.lineTo(pts[0].x, pts[0].y);
+    ctx.moveTo(pts[0].clientX, pts[0].clientY);
+    for (let i = 1; i < pts.length; i++) {
+      ctx.lineTo(pts[i].clientX, pts[i].clientY);
+    }
+    if (pts.length > 1) {
+      ctx.lineTo(pts[0].clientX, pts[0].clientY);
+    }
 
     ctx.strokeStyle = "#00b3ff";
     ctx.lineWidth = 2;
@@ -220,72 +310,36 @@ export default function OverlayApp() {
     ctx.setLineDash([]);
   };
 
-  // popup placement helpers
-  const placePopupForBox = (id, box, page) => {
-    const margin = 8;
-    const estW = 260;
-    const estH = 160;
-
-    // default: right side, top-aligned
-    let x = box.maxX + margin;
-    let y = box.minY;
-
-    // if overflow right, flip to left
-    if (x + estW > page.width) x = Math.max(0, box.minX - estW - margin);
-    // clamp Y within page
-    if (y + estH > page.height) y = Math.max(0, page.height - estH - margin);
-    if (y < 0) y = 0;
-
-    return {
-      id,
-      x,
-      y,
-      content: {
-        vertices: Math.max(0, Math.round(box.w + box.h) /* demo */),
-        bbox: box,
-      },
-    };
-  };
-
-  const clampPopup = (p, pageW, pageH) => {
-    const estW = 260,
-      estH = 160,
-      m = 8;
-    let x = p.x,
-      y = p.y;
-    if (x + estW > pageW) x = pageW - estW - m;
-    if (y + estH > pageH) y = pageH - estH - m;
-    if (x < 0) x = 0;
-    if (y < 0) y = 0;
-    return { ...p, x, y };
-  };
-
-  // actions
   const undo = () => {
     const last = polysRef.current.pop();
     if (last) {
+      anchorsRef.current.delete(last.id);
       setPopups((prev) => prev.filter((p) => p.id !== last.id));
       redrawInk();
+      bump();
     }
   };
+
   const clearAll = () => {
     polysRef.current.length = 0;
+    anchorsRef.current.clear();
     setPopups([]);
     redrawInk();
+    bump();
   };
+
   const closePopup = (id) =>
     setPopups((prev) => prev.filter((p) => p.id !== id));
 
   return (
     <div
       style={{
-        position: "absolute",
-        left: 0,
-        top: 0,
-        width: pageSize.width,
-        height: pageSize.height,
+        position: "fixed",
+        inset: 0,
+        width: viewport.width,
+        height: viewport.height,
         zIndex: 2147483647,
-        pointerEvents: "none", // page remains clickable
+        pointerEvents: "none",
       }}
     >
       <canvas
@@ -297,7 +351,6 @@ export default function OverlayApp() {
         style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
       />
 
-      {/* Toolbar (clickable) */}
       <div
         style={{
           position: "fixed",
@@ -321,36 +374,56 @@ export default function OverlayApp() {
         <button onClick={clearAll}>Clear</button>
       </div>
 
-      {/* One popup per lasso */}
-      {popups.map((p) => (
-        <PopupBubble
-          key={p.id}
-          x={p.x}
-          y={p.y}
-          onClose={() => closePopup(p.id)}
-        >
-          <div style={{ marginBottom: 6 }}>
-            <div>
-              <b>Lasso ID:</b> {p.id.slice(0, 8)}
+      {popups.map((p) => {
+        const anchor = getAnchor(p.id);
+        const pos = clientPointFromAnchor(anchor, p.popupOffset);
+        if (!pos) return null;
+        return (
+          <PopupBubble
+            key={p.id}
+            x={pos.x}
+            y={pos.y}
+            onClose={() => closePopup(p.id)}
+          >
+            <div style={{ marginBottom: 6 }}>
+              <div>
+                <b>Lasso ID:</b> {p.id.slice(0, 8)}
+              </div>
+              <div>
+                <b>Vertices:</b>{" "}
+                {polysRef.current.find((poly) => poly.id === p.id)?.pts
+                  .length ?? 0}
+              </div>
+              <div>
+                <b>BBox:</b> {Math.round(p.content.bbox.w)}×
+                {Math.round(p.content.bbox.h)} px
+              </div>
             </div>
-            <div>
-              <b>Vertices:</b>{" "}
-              {polysRef.current.find((poly) => poly.id === p.id)?.pts.length ??
-                0}
+            <div style={{ marginTop: 6 }}>
+              <b>Text:</b> {p.content.text || <i>No text detected</i>}
             </div>
-            <div>
-              <b>BBox:</b> {Math.round(p.content.bbox.w)}×
-              {Math.round(p.content.bbox.h)} px
+            <div style={{ fontSize: 12, color: "#555" }}>
+              This popup is independent — you can render per-lasso actions.
             </div>
-          </div>
-          <div style={{ marginTop: 6 }}>
-            <b>Text:</b> {p.content.text || <i>No text detected</i>}
-          </div>
-          <div style={{ fontSize: 12, color: "#555" }}>
-            This popup is independent — you can render per-lasso actions.
-          </div>
-        </PopupBubble>
-      ))}
+          </PopupBubble>
+        );
+      })}
     </div>
   );
+}
+
+function placePopupOffset(clientBox, anchor, view) {
+  const margin = 8;
+  const estW = 260;
+  const estH = 160;
+  const ar = anchor.getBoundingClientRect();
+
+  let x = clientBox.maxX + margin;
+  let y = clientBox.minY;
+
+  if (x + estW > view.width) x = Math.max(margin, clientBox.minX - estW - margin);
+  if (y + estH > view.height) y = Math.max(margin, view.height - estH - margin);
+  if (y < margin) y = margin;
+
+  return { dx: x - ar.left, dy: y - ar.top };
 }

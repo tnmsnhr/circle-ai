@@ -15,28 +15,18 @@ import "./overlay.css";
 
   const host = document.createElement("div");
   host.setAttribute("id", "draw-on-web-root-host");
-  // In the document layer (not fixed) so lassos scroll and rubber-band bounce with the page.
-  // Strokes use pageX/pageY; mount on body (not <html>) so absolute coords track the document.
+  // Viewport-fixed layer; selections track page content via DOM anchor + getBoundingClientRect.
   host.style.cssText = [
-    "position:absolute",
-    "left:0",
-    "top:0",
-    "width:0",
-    "height:0",
-    "overflow:visible",
+    "position:fixed",
+    "inset:0",
+    "width:100vw",
+    "height:100vh",
+    "overflow:hidden",
     "pointer-events:none",
     "z-index:2147483647",
   ].join(";");
 
-  const mountHost = () => {
-    const target = document.body;
-    if (!target) {
-      requestAnimationFrame(mountHost);
-      return;
-    }
-    target.appendChild(host);
-  };
-  mountHost();
+  document.documentElement.appendChild(host);
 
   const shadow = host.attachShadow({ mode: "open" });
 
@@ -61,7 +51,7 @@ import "./overlay.css";
   const root = createRoot(mount);
   root.render(<OverlayApp />);
 
-  // OverlayApp sizes to the full page in document coordinates and moves with body.
+  // OverlayApp renders in viewport space, pinned to DOM anchors under each selection.
   chrome.runtime.sendMessage({ type: "OFFSCREEN_PING" }, (res) => {
     console.log("[circle-ai] offscreen pong:", res);
   });
