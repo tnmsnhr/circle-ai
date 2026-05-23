@@ -1,5 +1,6 @@
 // OverlayLasso.jsx
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import PopupBubble from "./components/PopupBubble.jsx";
 import {
@@ -10,23 +11,28 @@ import {
   clientPointsFromAnchor,
   clientPointFromAnchor,
   offsetsFromClientPoints,
+  loadSettings,
+  isDrawingEnabled,
 } from "./utils";
 
-const isHotkey = (e) => e.metaKey;
+const isHotkey = (e) => e.metaKey || e.ctrlKey;
 
-export default function OverlayApp() {
+export default function OverlayApp({ toolbarMount }) {
   const [hotkeyReady, setHotkeyReady] = useState(false);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawingEnabled, setDrawingEnabled] = useState(true);
   const [viewport, setViewport] = useState(getViewportSize());
   const [, setFrame] = useState(0);
+
+  const drawingEnabledRef = useRef(true);
+  const isDrawingRef = useRef(false);
+  const viewportRef = useRef(viewport);
+  viewportRef.current = viewport;
 
   const [popups, setPopups] = useState([]);
 
   const liveCanvasRef = useRef(null);
   const inkCanvasRef = useRef(null);
-  /** @type {React.MutableRefObject<Array<{clientX:number,clientY:number,pageX:number,pageY:number}>>} */
   const pointsRef = useRef([]);
-  /** @type {React.MutableRefObject<Array<{id:string,pts:Array<{x:number,y:number}>,offsets:Array<{dx:number,dy:number}>,anchor:Element}>>} */
   const polysRef = useRef([]);
   const anchorsRef = useRef(new Map());
 
@@ -40,31 +46,10 @@ export default function OverlayApp() {
 
   const bump = () => setFrame((n) => n + 1);
 
-  const resizeCanvases = () => {
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const { width, height } = getViewportSize();
-    setViewport({ width, height });
-
-    for (const c of [liveCanvasRef.current, inkCanvasRef.current]) {
-      if (!c) continue;
-      c.style.width = `${width}px`;
-      c.style.height = `${height}px`;
-      c.width = Math.ceil(width * dpr);
-      c.height = Math.ceil(height * dpr);
-      const ctx = c.getContext("2d");
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.lineJoin = "round";
-      ctx.lineCap = "round";
-    }
-
-    liveCtx()?.clearRect(0, 0, width, height);
-    redrawInk();
-  };
-
   const redrawInk = () => {
     const ctx = inkCtx();
     if (!ctx) return;
-    const { width, height } = viewport;
+    const { width, height } = viewportRef.current;
     ctx.clearRect(0, 0, width, height);
     ctx.lineWidth = 2;
     ctx.strokeStyle = "#22c55e";
@@ -90,9 +75,61 @@ export default function OverlayApp() {
     }
   };
 
+  const drawLive = () => {
+    const ctx = liveCtx();
+    if (!ctx) return;
+    const { width, height } = viewportRef.current;
+    ctx.clearRect(0, 0, width, height);
+    const pts = pointsRef.current;
+    if (pts.length < 1) return;
+
+    ctx.beginPath();
+    ctx.moveTo(pts[0].clientX, pts[0].clientY);
+    for (let i = 1; i < pts.length; i++) {
+      ctx.lineTo(pts[i].clientX, pts[i].clientY);
+    }
+    if (pts.length > 1) {
+      ctx.lineTo(pts[0].clientX, pts[0].clientY);
+    }
+
+    ctx.strokeStyle = "#00b3ff";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  };
+
+  const resizeCanvases = () => {
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const { width, height } = getViewportSize();
+    setViewport({ width, height });
+
+    for (const c of [liveCanvasRef.current, inkCanvasRef.current]) {
+      if (!c) continue;
+      c.style.width = `${width}px`;
+      c.style.height = `${height}px`;
+      c.width = Math.ceil(width * dpr);
+      c.height = Math.ceil(height * dpr);
+      const ctx = c.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+    }
+
+    liveCtx()?.clearRect(0, 0, width, height);
+    redrawInk();
+  };
+
   const syncFrame = () => {
     redrawInk();
     bump();
+  };
+
+  const cancelLive = () => {
+    isDrawingRef.current = false;
+    pointsRef.current = [];
+    const { width, height } = viewportRef.current;
+    liveCtx()?.clearRect(0, 0, width, height);
   };
 
   useEffect(() => {
@@ -144,7 +181,32 @@ export default function OverlayApp() {
   }, []);
 
   useEffect(() => {
-    const down = (e) => setHotkeyReady(isHotkey(e));
+    loadSettings().then((s) => {
+      const on = isDrawingEnabled(s);
+      drawingEnabledRef.current = on;
+      setDrawingEnabled(on);
+    });
+
+    const onStorageChange = (changes, area) => {
+      if (area !== "sync" || changes.enabled === undefined) return;
+      const on = changes.enabled.newValue !== false;
+      drawingEnabledRef.current = on;
+      setDrawingEnabled(on);
+      if (!on) {
+        cancelLive();
+        setHotkeyReady(false);
+      }
+    };
+    chrome.storage.onChanged.addListener(onStorageChange);
+    return () => chrome.storage.onChanged.removeListener(onStorageChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const down = (e) => {
+      if (!drawingEnabledRef.current) return;
+      setHotkeyReady(isHotkey(e));
+    };
     const up = () => setHotkeyReady(false);
     window.addEventListener("keydown", down, { capture: true });
     window.addEventListener("keyup", up, { capture: true });
@@ -164,62 +226,9 @@ export default function OverlayApp() {
   }, []);
 
   useEffect(() => {
-    const isCombo = (e) => isHotkey(e);
-
-    const start = (e) => {
-      if (!(e instanceof PointerEvent)) return;
-      if (!isCombo(e)) return;
-      if (e.button !== 0) return;
-      setIsDrawing(true);
-      pointsRef.current = [
-        {
-          clientX: e.clientX,
-          clientY: e.clientY,
-          pageX: e.pageX,
-          pageY: e.pageY,
-        },
-      ];
-      drawLive();
-      e.preventDefault();
-    };
-
-    const move = (e) => {
-      if (!isDrawing) return;
-      if (!isHotkey(e)) return finishCommit();
-      const pts = pointsRef.current;
-      const last = pts[pts.length - 1];
-      if (
-        (e.clientX - last.clientX) ** 2 + (e.clientY - last.clientY) ** 2 <
-        2
-      ) {
-        return;
-      }
-      pts.push({
-        clientX: e.clientX,
-        clientY: e.clientY,
-        pageX: e.pageX,
-        pageY: e.pageY,
-      });
-      drawLive();
-      e.preventDefault();
-    };
-
-    const end = (e) => {
-      if (!isDrawing) return;
-      if (e.type === "pointerup" && e.button !== 0) return;
-      finishCommit();
-      e.preventDefault();
-    };
-
-    const esc = (e) => {
-      if (e.key !== "Escape") return;
-      if (!isDrawing) return;
-      cancelLive();
-    };
-
     const finishCommit = () => {
       const points = pointsRef.current;
-      setIsDrawing(false);
+      isDrawingRef.current = false;
       pointsRef.current = [];
 
       if (points.length >= 3) {
@@ -247,8 +256,9 @@ export default function OverlayApp() {
 
         redrawInk();
 
+        const view = viewportRef.current;
         const box = bboxOf(clientPts);
-        const popupOffset = placePopupOffset(box, anchor, viewport);
+        const popupOffset = placePopupOffset(box, anchor, view);
         setPopups((prev) => [
           ...prev,
           {
@@ -262,13 +272,60 @@ export default function OverlayApp() {
         ]);
       }
 
-      liveCtx()?.clearRect(0, 0, viewport.width, viewport.height);
+      const { width, height } = viewportRef.current;
+      liveCtx()?.clearRect(0, 0, width, height);
     };
 
-    const cancelLive = () => {
-      setIsDrawing(false);
-      pointsRef.current = [];
-      liveCtx()?.clearRect(0, 0, viewport.width, viewport.height);
+    const start = (e) => {
+      if (!(e instanceof PointerEvent)) return;
+      if (!drawingEnabledRef.current) return;
+      if (!isHotkey(e)) return;
+      if (e.button !== 0) return;
+      isDrawingRef.current = true;
+      pointsRef.current = [
+        {
+          clientX: e.clientX,
+          clientY: e.clientY,
+          pageX: e.pageX,
+          pageY: e.pageY,
+        },
+      ];
+      drawLive();
+      e.preventDefault();
+    };
+
+    const move = (e) => {
+      if (!isDrawingRef.current) return;
+      if (!isHotkey(e)) return finishCommit();
+      const pts = pointsRef.current;
+      const last = pts[pts.length - 1];
+      if (
+        (e.clientX - last.clientX) ** 2 + (e.clientY - last.clientY) ** 2 <
+        2
+      ) {
+        return;
+      }
+      pts.push({
+        clientX: e.clientX,
+        clientY: e.clientY,
+        pageX: e.pageX,
+        pageY: e.pageY,
+      });
+      drawLive();
+      e.preventDefault();
+    };
+
+    const end = (e) => {
+      if (!isDrawingRef.current) return;
+      if (e.type === "pointerup" && e.button !== 0) return;
+      finishCommit();
+      e.preventDefault();
+    };
+
+    const esc = (e) => {
+      if (e.key !== "Escape") return;
+      if (!isDrawingRef.current) return;
+      cancelLive();
     };
 
     window.addEventListener("pointerdown", start, { capture: true });
@@ -284,31 +341,7 @@ export default function OverlayApp() {
       window.removeEventListener("pointercancel", end, { capture: true });
       window.removeEventListener("keydown", esc, { capture: true });
     };
-  }, [isDrawing, viewport.width, viewport.height]);
-
-  const drawLive = () => {
-    const ctx = liveCtx();
-    if (!ctx) return;
-    const { width, height } = viewport;
-    ctx.clearRect(0, 0, width, height);
-    const pts = pointsRef.current;
-    if (pts.length < 1) return;
-
-    ctx.beginPath();
-    ctx.moveTo(pts[0].clientX, pts[0].clientY);
-    for (let i = 1; i < pts.length; i++) {
-      ctx.lineTo(pts[i].clientX, pts[i].clientY);
-    }
-    if (pts.length > 1) {
-      ctx.lineTo(pts[0].clientX, pts[0].clientY);
-    }
-
-    ctx.strokeStyle = "#00b3ff";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 6]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  };
+  }, []);
 
   const undo = () => {
     const last = polysRef.current.pop();
@@ -331,48 +364,50 @@ export default function OverlayApp() {
   const closePopup = (id) =>
     setPopups((prev) => prev.filter((p) => p.id !== id));
 
+  const toolbar = (
+    <div className="draw-toolbar">
+      <span className="hint">
+        Hold <b>⌘</b> (or <b>Ctrl</b>) and drag{" "}
+        {!drawingEnabled
+          ? "(disabled)"
+          : hotkeyReady
+            ? "(ready)"
+            : ""}
+      </span>
+      <button type="button" onClick={undo}>
+        Undo
+      </button>
+      <button type="button" onClick={clearAll}>
+        Clear
+      </button>
+    </div>
+  );
+
   return (
     <div
+      className="draw-root"
       style={{
         position: "fixed",
         inset: 0,
         width: viewport.width,
         height: viewport.height,
-        zIndex: 2147483647,
         pointerEvents: "none",
       }}
     >
       <canvas
         ref={inkCanvasRef}
+        className="draw-canvas-wrap"
         style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
       />
       <canvas
         ref={liveCanvasRef}
+        className="draw-canvas-wrap"
         style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
       />
 
-      <div
-        style={{
-          position: "fixed",
-          right: 16,
-          bottom: 16,
-          background: "rgba(20,20,20,0.85)",
-          color: "#fff",
-          borderRadius: 10,
-          padding: "6px 10px",
-          fontSize: 12,
-          pointerEvents: "auto",
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-        }}
-      >
-        <span>
-          Hold <b>⌘+Ctrl</b> and drag {hotkeyReady ? "(ready)" : ""}
-        </span>
-        <button onClick={undo}>Undo</button>
-        <button onClick={clearAll}>Clear</button>
-      </div>
+      {toolbarMount
+        ? createPortal(toolbar, toolbarMount)
+        : toolbar}
 
       {popups.map((p) => {
         const anchor = getAnchor(p.id);
@@ -401,9 +436,6 @@ export default function OverlayApp() {
             </div>
             <div style={{ marginTop: 6 }}>
               <b>Text:</b> {p.content.text || <i>No text detected</i>}
-            </div>
-            <div style={{ fontSize: 12, color: "#555" }}>
-              This popup is independent — you can render per-lasso actions.
             </div>
           </PopupBubble>
         );

@@ -1,29 +1,26 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
+// Single-file content script (no extra chunks — required for MV3).
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: 'dist',
+    outDir: "dist",
+    emptyOutDir: false,
     lib: {
-      entry: 'src/content-script.jsx',
-      name: 'contentScript',
-      formats: ['iife'],
-      fileName: () => 'content-script.js'
+      entry: "src/content-script.jsx",
+      name: "CircleAIContent",
+      formats: ["iife"],
+      fileName: () => "content-script.js",
     },
     rollupOptions: {
       output: {
-        globals: {
-          react: 'React',
-          'react-dom': 'ReactDOM'
-        }
-      }
+        inlineDynamicImports: true,
+        extend: true,
+      },
     },
-    emptyOutDir: false
   },
   define: {
-    'process.env': {},
-    'process.env.NODE_ENV': JSON.stringify('production'),
-    global: 'globalThis'
-  }
+    "process.env.NODE_ENV": JSON.stringify("production"),
+  },
 });

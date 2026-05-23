@@ -8,6 +8,13 @@ import {
   clientPointFromAnchor,
   offsetsFromClientPoints,
 } from "./anchorCoords";
+import {
+  DEFAULT_SETTINGS,
+  loadSettings,
+  saveSettings,
+  applyThemeToDocument,
+  isDrawingEnabled,
+} from "./settings";
 
 export {
   getPageSize,
@@ -18,4 +25,9 @@ export {
   clientPointsFromAnchor,
   clientPointFromAnchor,
   offsetsFromClientPoints,
+  DEFAULT_SETTINGS,
+  loadSettings,
+  saveSettings,
+  applyThemeToDocument,
+  isDrawingEnabled,
 };

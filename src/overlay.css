@@ -1,7 +1,3 @@
-:host {
-  all: initial;
-}
-
 .draw-root {
   position: absolute;
   inset: 0;
@@ -35,13 +31,32 @@
   right: 16px;
   bottom: 16px;
   padding: 8px 10px;
-  background: rgba(20,20,20,0.8);
+  background: rgba(20, 20, 20, 0.92);
   color: #fff;
   border-radius: 10px;
   font-size: 12px;
   line-height: 1.2;
   user-select: none;
   pointer-events: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.draw-toolbar button {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.draw-toolbar button:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .color-swatch { /* ... unchanged ... */ }
