@@ -16,6 +16,7 @@ import {
   BUBBLE_MORPH_MS,
   loadSettings,
   isDrawingEnabled,
+  isAutoCollapseEnabled,
   getLassoTheme,
   DEFAULT_LASSO_THEME_ID,
 } from "./utils";
@@ -29,6 +30,7 @@ export default function OverlayApp({ toolbarMount }) {
   const [, setFrame] = useState(0);
 
   const drawingEnabledRef = useRef(true);
+  const autoCollapseRef = useRef(true);
   const isDrawingRef = useRef(false);
   const lassoThemeRef = useRef(getLassoTheme(DEFAULT_LASSO_THEME_ID));
   const viewportRef = useRef(viewport);
@@ -290,6 +292,7 @@ export default function OverlayApp({ toolbarMount }) {
       onCollapse: collapseBubbles,
       isFullyCompact: () =>
         popupsCompactRef.current && expandedPopupIdsRef.current.size === 0,
+      isEnabled: () => autoCollapseRef.current,
     });
     resetScrollAccumulatedRef.current = cleanup.resetAccumulated;
     return () => {
@@ -304,6 +307,7 @@ export default function OverlayApp({ toolbarMount }) {
       const on = isDrawingEnabled(s);
       drawingEnabledRef.current = on;
       setDrawingEnabled(on);
+      autoCollapseRef.current = isAutoCollapseEnabled(s);
       lassoThemeRef.current = getLassoTheme(s.lassoTheme);
       redrawInk();
     });
@@ -325,6 +329,10 @@ export default function OverlayApp({ toolbarMount }) {
         lassoThemeRef.current = getLassoTheme(changes.lassoTheme.newValue);
         redrawInk();
         if (isDrawingRef.current) drawLive();
+      }
+
+      if (changes.autoCollapse !== undefined) {
+        autoCollapseRef.current = changes.autoCollapse.newValue !== false;
       }
     };
     chrome.storage.onChanged.addListener(onStorageChange);

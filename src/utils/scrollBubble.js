@@ -8,7 +8,11 @@ export const BUBBLE_MORPH_MS = 360;
  * Collapse bubbles after scroll threshold. Expand only via user click on a chip.
  * "Fully compact" = all chips, none manually expanded.
  */
-export function attachScrollBubbleController({ onCollapse, isFullyCompact }) {
+export function attachScrollBubbleController({
+  onCollapse,
+  isFullyCompact,
+  isEnabled = () => true,
+}) {
   const scrollPos = new WeakMap();
   let accumulated = 0;
   let lastWinX = window.scrollX;
@@ -45,7 +49,11 @@ export function attachScrollBubbleController({ onCollapse, isFullyCompact }) {
 
     accumulated += delta;
 
-    if (accumulated >= SCROLL_COLLAPSE_THRESHOLD_PX && !isFullyCompact()) {
+    if (
+      isEnabled() &&
+      accumulated >= SCROLL_COLLAPSE_THRESHOLD_PX &&
+      !isFullyCompact()
+    ) {
       onCollapse();
       accumulated = 0;
     }
