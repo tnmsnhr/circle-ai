@@ -56,4 +56,53 @@ import "./overlay.css";
   chrome.runtime.sendMessage({ type: "CAPTURE_TEST" }, (res) => {
     console.log("[circle-ai] capture test:", res);
   });
+
+  /* global chrome */
+
+  // helper to create a small test rectangle in CSS px at viewport center
+  function debugRect(w = 200, h = 120) {
+    const vw = Math.min(
+      window.innerWidth,
+      document.documentElement.clientWidth || window.innerWidth
+    );
+    const vh = Math.min(
+      window.innerHeight,
+      document.documentElement.clientHeight || window.innerHeight
+    );
+    const cx = Math.floor(vw / 2),
+      cy = Math.floor(vh / 2);
+    const left = cx - Math.floor(w / 2);
+    const top = cy - Math.floor(h / 2);
+    return [
+      { x: left, y: top },
+      { x: left + w, y: top },
+      { x: left + w, y: top + h },
+      { x: left, y: top + h },
+    ];
+  }
+
+  // --- test call: replace `polygon` with your lasso points ---
+  const polygon = debugRect(260, 160); // or yourPointsArrayInCssPixels
+  const dpr = window.devicePixelRatio || 1;
+
+  // withPreview=true returns a dataURL so you can visually confirm
+  // chrome.runtime.sendMessage(
+  //   { type: "CROP_TEST", payload: { polygon, dpr, withPreview: true } },
+  //   (res) => {
+  //     console.log("[circle-ai] CROP_TEST:", res);
+  //     if (res?.ok && res.dataUrl) {
+  //       // quick visual confirmation: append preview image
+  //       const img = document.createElement("img");
+  //       img.src = res.dataUrl;
+  //       img.style.position = "fixed";
+  //       img.style.right = "12px";
+  //       img.style.bottom = "12px";
+  //       img.style.maxWidth = "30vw";
+  //       img.style.maxHeight = "30vh";
+  //       img.style.border = "1px solid #888";
+  //       img.style.zIndex = "999999";
+  //       document.body.appendChild(img);
+  //     }
+  //   }
+  // );
 })();

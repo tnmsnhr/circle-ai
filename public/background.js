@@ -60,4 +60,30 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     })();
     return true;
   }
+
+  if (msg?.type === "CROP_TEST") {
+  (async () => {
+    try {
+      const { polygon, dpr = 1, withPreview = false } = msg.payload || {};
+      if (!Array.isArray(polygon) || polygon.length < 3) {
+        throw new Error("CROP_TEST: polygon must have >= 3 points in CSS pixels");
+      }
+
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+
+      await ensureOffscreen();
+      const result = await chrome.runtime.sendMessage({
+        type: "OFFSCREEN_CROP",
+        payload: { dataUrl, polygon, dpr, withPreview }
+      });
+
+      sendResponse({ ok: true, ...result });
+    } catch (e) {
+      console.error("CROP_TEST error:", e);
+      sendResponse({ ok: false, error: String(e) });
+    }
+  })();
+  return true;
+}
 });
