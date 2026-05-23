@@ -15,13 +15,25 @@ import "./overlay.css";
 
   const host = document.createElement("div");
   host.setAttribute("id", "draw-on-web-root-host");
-  // Use a very high z-index container that sits at document root
-  host.style.position = "absolute";
-  host.style.left = "0";
-  host.style.top = "0";
-  host.style.width = "0";
-  host.style.height = "0";
-  host.style.zIndex = "2147483647";
+  // Fixed layer + scroll offset: strokes use pageX/pageY (document space) but must
+  // move with the viewport as the user scrolls.
+  host.style.cssText = [
+    "position:fixed",
+    "left:0",
+    "top:0",
+    "width:0",
+    "height:0",
+    "overflow:visible",
+    "pointer-events:none",
+    "z-index:2147483647",
+  ].join(";");
+
+  const syncHostScroll = () => {
+    host.style.transform = `translate3d(${-window.scrollX}px, ${-window.scrollY}px, 0)`;
+  };
+  syncHostScroll();
+  window.addEventListener("scroll", syncHostScroll, { passive: true });
+  window.addEventListener("resize", syncHostScroll, { passive: true });
 
   document.documentElement.appendChild(host);
 
@@ -48,8 +60,8 @@ import "./overlay.css";
   const root = createRoot(mount);
   root.render(<OverlayApp />);
 
-  // Ensure the host follows the document size by pinning at 0,0.
-  // The inner component sizes to full page and will scroll naturally with the document.
+  // OverlayApp sizes to the full page in document coordinates; syncHostScroll keeps
+  // the fixed host aligned with document scroll.
   chrome.runtime.sendMessage({ type: "OFFSCREEN_PING" }, (res) => {
     console.log("[circle-ai] offscreen pong:", res);
   });

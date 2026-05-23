@@ -72,18 +72,16 @@ export default function OverlayApp() {
     const ro = new ResizeObserver(resizeCanvases);
     ro.observe(document.documentElement);
 
-    const onWinResizeOrScroll = () => {
-      if (onWinResizeOrScroll._r) cancelAnimationFrame(onWinResizeOrScroll._r);
-      onWinResizeOrScroll._r = requestAnimationFrame(resizeCanvases);
+    const onWinResize = () => {
+      if (onWinResize._r) cancelAnimationFrame(onWinResize._r);
+      onWinResize._r = requestAnimationFrame(resizeCanvases);
     };
-    window.addEventListener("resize", onWinResizeOrScroll, { passive: true });
-    window.addEventListener("scroll", onWinResizeOrScroll, { passive: true });
+    window.addEventListener("resize", onWinResize, { passive: true });
 
     return () => {
       ro.disconnect();
-      window.removeEventListener("resize", onWinResizeOrScroll);
-      window.removeEventListener("scroll", onWinResizeOrScroll);
-      if (onWinResizeOrScroll._r) cancelAnimationFrame(onWinResizeOrScroll._r);
+      window.removeEventListener("resize", onWinResize);
+      if (onWinResize._r) cancelAnimationFrame(onWinResize._r);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
