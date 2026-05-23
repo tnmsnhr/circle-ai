@@ -1,3 +1,13 @@
+/** Payload contract versions (see token-optimized plan). */
+export const SCHEMA_VERSION = "1";
+export const EXTRACTOR_VERSION = "1.0.0";
+
+/** Session cache TTL (extension chrome.storage.session). */
+export const PAGE_CONTEXT_TTL_MS = 30 * 60 * 1000; // 30 min idle
+export const SELECTION_CONTEXT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+export type SelectionTier = "tiny" | "medium" | "large";
+
 /** Character limits for token/cost control. */
 export const LIMITS = {
   focusText: 4000,

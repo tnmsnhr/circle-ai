@@ -98,6 +98,13 @@ export interface ExtractedContext {
   };
   /** Labeled payload for AI — userSelection vs surroundingContext. */
   aiPayload?: import("./buildAiPayload.js").AiSelectionPayload;
+  /** Pruned payload for syncle-services (plan: OptimizedAiPayload). */
+  optimizedPayload?: import("./optimizePayload.js").OptimizedAiPayload;
+  /** Backend canonical IDs after register (when signed in). */
+  contextIds?: {
+    pageContextId: string;
+    selectionContextId: string;
+  };
 }
 
 export interface CaptureCropRequest {
