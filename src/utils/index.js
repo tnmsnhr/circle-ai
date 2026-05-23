@@ -7,6 +7,7 @@ import {
   clientPointsFromAnchor,
   clientPointFromAnchor,
   offsetsFromClientPoints,
+  getSelectionCentroid,
 } from "./anchorCoords";
 import {
   DEFAULT_SETTINGS,
@@ -20,6 +21,12 @@ import {
   DEFAULT_LASSO_THEME_ID,
   getLassoTheme,
 } from "./lassoThemes";
+import {
+  SCROLL_COLLAPSE_THRESHOLD_PX,
+  SCROLL_SETTLE_BEFORE_EXPAND_MS,
+  BUBBLE_MORPH_MS,
+  attachScrollBubbleController,
+} from "./scrollBubble";
 
 export {
   getPageSize,
@@ -30,6 +37,7 @@ export {
   clientPointsFromAnchor,
   clientPointFromAnchor,
   offsetsFromClientPoints,
+  getSelectionCentroid,
   DEFAULT_SETTINGS,
   loadSettings,
   saveSettings,
@@ -38,4 +46,8 @@ export {
   LASSO_THEMES,
   DEFAULT_LASSO_THEME_ID,
   getLassoTheme,
+  SCROLL_COLLAPSE_THRESHOLD_PX,
+  SCROLL_SETTLE_BEFORE_EXPAND_MS,
+  BUBBLE_MORPH_MS,
+  attachScrollBubbleController,
 };

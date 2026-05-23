@@ -23,6 +23,19 @@ export function pickAnchor(clientX, clientY) {
   return best;
 }
 
+/** Center of a selection in viewport coordinates. */
+export function getSelectionCentroid(anchor, offsets, pagePtsFallback) {
+  const pts = clientPointsFromAnchor(anchor, offsets, pagePtsFallback);
+  if (!pts?.length) return null;
+  let x = 0;
+  let y = 0;
+  for (const p of pts) {
+    x += p.x;
+    y += p.y;
+  }
+  return { x: x / pts.length, y: y / pts.length };
+}
+
 export function getViewportSize() {
   const vv = window.visualViewport;
   return {

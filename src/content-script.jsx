@@ -2,6 +2,9 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import OverlayApp from "./OverlayApp.jsx";
 import overlayCss from "./overlay.css?inline";
+import popupBubbleCss from "./components/popupBubble.css?inline";
+
+const extensionCss = `${overlayCss}\n${popupBubbleCss}`;
 
 /**
  * Inject a Shadow DOM root to isolate styles from the host page.
@@ -34,7 +37,7 @@ import overlayCss from "./overlay.css?inline";
 
   const pageStyle = document.createElement("style");
   pageStyle.id = "circle-ai-page-styles";
-  pageStyle.textContent = overlayCss;
+  pageStyle.textContent = extensionCss;
 
   document.documentElement.appendChild(host);
   document.documentElement.appendChild(toolbarMount);
@@ -43,7 +46,7 @@ import overlayCss from "./overlay.css?inline";
   const shadow = host.attachShadow({ mode: "open" });
 
   const style = document.createElement("style");
-  style.textContent = overlayCss;
+  style.textContent = extensionCss;
   shadow.appendChild(style);
 
   const mount = document.createElement("div");

@@ -1,84 +1,116 @@
-import React from "react"
-import "./popupBubble.css"
+import React, { useLayoutEffect, useRef } from "react";
+import "./popupBubble.css";
 
-const PopupBubble = ({ x, y, onClose, children }) => {
-    const isDark = false
-    // const isDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+const PopupBubble = ({
+  x,
+  y,
+  centroidX,
+  centroidY,
+  compact,
+  morph,
+  accentColor = "#22c55e",
+  fillColor = "rgba(34, 197, 94, 0.2)",
+  onClose,
+  onExpand,
+  children,
+}) => {
+  const rootRef = useRef(null);
+  const cx = centroidX ?? x;
+  const cy = centroidY ?? y;
+
+  // Compact chips track the selection instantly (no CSS transition on position).
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+
+    if (morph) {
+      el.style.removeProperty("left");
+      el.style.removeProperty("top");
+      el.style.removeProperty("transform");
+      return;
+    }
+
+    if (compact) {
+      el.style.left = `${cx}px`;
+      el.style.top = `${cy}px`;
+      el.style.transform = "translate(-50%, -50%)";
+    } else {
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.style.transform = "translate(0, 0)";
+    }
+  }, [compact, morph, x, y, cx, cy]);
+
+  const classNames = [
+    "popup-bubble",
+    compact && "popup-bubble--compact",
+    morph && "popup-bubble--morph",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div
-    className="popupContainer"
+      ref={rootRef}
+      className={classNames}
       style={{
-        position: "fixed",
-        left: x,
-        top: y,
-        zIndex: 2147483647,
-        pointerEvents: "auto",          
-         background: isDark ? "rgba(22,22,22,0.55)" : "rgba(255,255,255,0.55)",
-        backdropFilter: "blur(16px) saturate(160%) contrast(105%)",
-        WebkitBackdropFilter: "blur(16px) saturate(160%) contrast(105%)",
-        border: isDark
-        ? "1px solid rgba(255,255,255,0.12)"
-        : "1px solid rgba(0,0,0,0.10)",
-      borderRadius: 12,
-      boxShadow: isDark
-        ? "0 8px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)"
-        : "0 8px 30px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.6)",
-        padding: 10,
-        minWidth: 220,
-        maxWidth: 320,
-        color: isDark ? "#f5f5f5" : "#111",
-        font: "13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+        "--bubble-x": `${x}px`,
+        "--bubble-y": `${y}px`,
+        "--chip-x": `${cx}px`,
+        "--chip-y": `${cy}px`,
+        "--accent": accentColor,
+        "--fill": fillColor,
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <strong style={{ fontSize: 13 }}>Selection</strong>
-        <button
-          onClick={onClose}
-          style={{
-            border: "none",
-            background: "transparent",
-            cursor: "pointer",
-            fontSize: 16,
-            lineHeight: 1
-          }}
-          aria-label="Close"
-          title="Close"
-        >
-          ×
-        </button>
-      </div>
+      <div className="popup-bubble__inner">
+        {!compact && (
+          <div className="popup-bubble__header">
+            <strong>Selection</strong>
+            <button
+              type="button"
+              className="popup-bubble__close"
+              onClick={onClose}
+              aria-label="Close"
+              title="Close"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
-      <div>{children}</div>
+        <div className="popup-bubble__content">{children}</div>
 
-      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <button
-          style={{
-            padding: "6px 10px",
-            borderRadius: 8,
-            border: "1px solid rgba(0,0,0,0.15)",
-            background: "#111",
-            color: "white",
-            cursor: "pointer"
-          }}
-          onClick={() => alert("Saved")}
-        >
-          Save
-        </button>
-        <button
-          style={{
-            padding: "6px 10px",
-            borderRadius: 8,
-            border: "1px solid rgba(0,0,0,0.15)",
-            background: "#f3f4f6",
-            cursor: "pointer"
-          }}
-          onClick={() => alert("Deleted")}
-        >
-          Delete
-        </button>
+        {!compact && (
+          <div className="popup-bubble__actions">
+            <button
+              type="button"
+              className="popup-bubble__btn popup-bubble__btn--primary"
+              onClick={() => alert("Saved")}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              className="popup-bubble__btn"
+              onClick={() => alert("Deleted")}
+            >
+              Delete
+            </button>
+          </div>
+        )}
+
+        {compact && (
+          <button
+            type="button"
+            className="popup-bubble__expand-hit"
+            onClick={onExpand}
+            aria-label="Expand selection chat"
+            title="Expand selection"
+          />
+        )}
       </div>
     </div>
   );
-}
+};
 
-export default PopupBubble
+export default PopupBubble;

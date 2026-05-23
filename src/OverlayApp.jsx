@@ -11,6 +11,9 @@ import {
   clientPointsFromAnchor,
   clientPointFromAnchor,
   offsetsFromClientPoints,
+  getSelectionCentroid,
+  attachScrollBubbleController,
+  BUBBLE_MORPH_MS,
   loadSettings,
   isDrawingEnabled,
   getLassoTheme,
@@ -32,6 +35,19 @@ export default function OverlayApp({ toolbarMount }) {
   viewportRef.current = viewport;
 
   const [popups, setPopups] = useState([]);
+  const [popupsCompact, setPopupsCompact] = useState(false);
+  const [bubbleMorph, setBubbleMorph] = useState(null);
+  const [pinnedPopupId, setPinnedPopupId] = useState(null);
+  const popupsCompactRef = useRef(false);
+  const bubbleMorphRef = useRef(null);
+  const pinnedPopupIdRef = useRef(null);
+  const morphTimerRef = useRef(null);
+  popupsCompactRef.current = popupsCompact;
+  bubbleMorphRef.current = bubbleMorph;
+  pinnedPopupIdRef.current = pinnedPopupId;
+
+  const popupsCountRef = useRef(0);
+  popupsCountRef.current = popups.length;
 
   const liveCanvasRef = useRef(null);
   const inkCanvasRef = useRef(null);
@@ -126,7 +142,36 @@ export default function OverlayApp({ toolbarMount }) {
 
   const syncFrame = () => {
     redrawInk();
-    bump();
+    // Keep popups/chips aligned with anchors on scroll (no transition while compact).
+    if (popupsCountRef.current > 0) {
+      bump();
+    }
+  };
+
+  const startMorph = (phase, afterFrame) => {
+    if (morphTimerRef.current) clearTimeout(morphTimerRef.current);
+    setBubbleMorph(phase);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(afterFrame);
+    });
+    morphTimerRef.current = setTimeout(() => {
+      setBubbleMorph(null);
+      morphTimerRef.current = null;
+      bump();
+    }, BUBBLE_MORPH_MS);
+  };
+
+  const collapseBubbles = () => {
+    if (popupsCompactRef.current) return;
+    startMorph("collapse", () => setPopupsCompact(true));
+  };
+
+  const expandBubbles = () => {
+    if (!popupsCompactRef.current && !bubbleMorphRef.current) return;
+    startMorph("expand", () => {
+      setPopupsCompact(false);
+      setPinnedPopupId(null);
+    });
   };
 
   const cancelLive = () => {
@@ -164,7 +209,11 @@ export default function OverlayApp({ toolbarMount }) {
     let active = true;
     const loop = () => {
       if (!active) return;
-      if (polysRef.current.length > 0 || pointsRef.current.length > 0) {
+      if (
+        polysRef.current.length > 0 ||
+        pointsRef.current.length > 0 ||
+        popupsCountRef.current > 0
+      ) {
         schedule();
       }
       requestAnimationFrame(loop);
@@ -183,6 +232,24 @@ export default function OverlayApp({ toolbarMount }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (popups.length === 0) {
+      setPopupsCompact(false);
+      setBubbleMorph(null);
+      setPinnedPopupId(null);
+      if (morphTimerRef.current) clearTimeout(morphTimerRef.current);
+      return;
+    }
+
+    return attachScrollBubbleController({
+      onCollapse: collapseBubbles,
+      onExpand: expandBubbles,
+      isPinned: () => Boolean(pinnedPopupIdRef.current),
+      isCollapsed: () => popupsCompactRef.current,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [popups.length]);
 
   useEffect(() => {
     loadSettings().then((s) => {
@@ -376,8 +443,62 @@ export default function OverlayApp({ toolbarMount }) {
     bump();
   };
 
-  const closePopup = (id) =>
+  const closePopup = (id) => {
     setPopups((prev) => prev.filter((p) => p.id !== id));
+    if (pinnedPopupId === id) setPinnedPopupId(null);
+  };
+
+  const popupNodes = popups.map((p) => {
+    const poly = polysRef.current.find((poly) => poly.id === p.id);
+    const anchor = getAnchor(p.id);
+    const pos = clientPointFromAnchor(anchor, p.popupOffset);
+    if (!pos || !poly) return null;
+
+    const centroid = getSelectionCentroid(anchor, poly.offsets, poly.pts);
+    const colors = lassoThemeRef.current;
+    const isCompact = popupsCompact && pinnedPopupId !== p.id;
+    const showMorph = Boolean(bubbleMorph);
+
+    const node = (
+      <PopupBubble
+        key={p.id}
+        x={pos.x}
+        y={pos.y}
+        centroidX={centroid?.x}
+        centroidY={centroid?.y}
+        compact={isCompact}
+        morph={showMorph ? bubbleMorph : null}
+        accentColor={colors.border}
+        fillColor={colors.fill}
+        onClose={() => closePopup(p.id)}
+        onExpand={() => {
+          setPinnedPopupId(p.id);
+          setPopupsCompact(false);
+          setBubbleMorph(null);
+          if (morphTimerRef.current) clearTimeout(morphTimerRef.current);
+          bump();
+        }}
+      >
+        <div style={{ marginBottom: 6 }}>
+          <div>
+            <b>Lasso ID:</b> {p.id.slice(0, 8)}
+          </div>
+          <div>
+            <b>Vertices:</b> {poly.pts.length}
+          </div>
+          <div>
+            <b>BBox:</b> {Math.round(p.content.bbox.w)}×
+            {Math.round(p.content.bbox.h)} px
+          </div>
+        </div>
+        <div style={{ marginTop: 6 }}>
+          <b>Text:</b> {p.content.text || <i>No text detected</i>}
+        </div>
+      </PopupBubble>
+    );
+
+    return toolbarMount ? createPortal(node, toolbarMount) : node;
+  });
 
   const toolbar = (
     <div className="draw-toolbar">
@@ -420,41 +541,9 @@ export default function OverlayApp({ toolbarMount }) {
         style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
       />
 
-      {toolbarMount
-        ? createPortal(toolbar, toolbarMount)
-        : toolbar}
+      {toolbarMount ? createPortal(toolbar, toolbarMount) : toolbar}
 
-      {popups.map((p) => {
-        const anchor = getAnchor(p.id);
-        const pos = clientPointFromAnchor(anchor, p.popupOffset);
-        if (!pos) return null;
-        return (
-          <PopupBubble
-            key={p.id}
-            x={pos.x}
-            y={pos.y}
-            onClose={() => closePopup(p.id)}
-          >
-            <div style={{ marginBottom: 6 }}>
-              <div>
-                <b>Lasso ID:</b> {p.id.slice(0, 8)}
-              </div>
-              <div>
-                <b>Vertices:</b>{" "}
-                {polysRef.current.find((poly) => poly.id === p.id)?.pts
-                  .length ?? 0}
-              </div>
-              <div>
-                <b>BBox:</b> {Math.round(p.content.bbox.w)}×
-                {Math.round(p.content.bbox.h)} px
-              </div>
-            </div>
-            <div style={{ marginTop: 6 }}>
-              <b>Text:</b> {p.content.text || <i>No text detected</i>}
-            </div>
-          </PopupBubble>
-        );
-      })}
+      {popupNodes}
     </div>
   );
 }
