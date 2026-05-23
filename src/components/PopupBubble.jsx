@@ -10,15 +10,17 @@ const PopupBubble = ({
   morph,
   accentColor = "#22c55e",
   fillColor = "rgba(34, 197, 94, 0.2)",
-  onClose,
+  onMinimize,
+  onDismiss,
+  onBringToFront,
   onExpand,
+  zIndex = 2147483647,
   children,
 }) => {
   const rootRef = useRef(null);
   const cx = centroidX ?? x;
   const cy = centroidY ?? y;
 
-  // Compact chips track the selection instantly (no CSS transition on position).
   useLayoutEffect(() => {
     const el = rootRef.current;
     if (!el) return;
@@ -60,44 +62,76 @@ const PopupBubble = ({
         "--chip-y": `${cy}px`,
         "--accent": accentColor,
         "--fill": fillColor,
+        "--bubble-z": String(zIndex),
       }}
     >
       <div className="popup-bubble__inner">
         {!compact && (
           <div className="popup-bubble__header">
-            <strong>Selection</strong>
-            <button
-              type="button"
-              className="popup-bubble__close"
-              onClick={onClose}
-              aria-label="Close"
-              title="Close"
-            >
-              ×
-            </button>
+            <div className="popup-bubble__traffic" aria-label="Window controls">
+              <button
+                type="button"
+                className="popup-bubble__dot popup-bubble__dot--dismiss"
+                onClick={onDismiss}
+                aria-label="Cancel selection"
+                title="Cancel — remove selection and chat"
+              >
+                <span className="popup-bubble__dot-icon" aria-hidden="true">
+                  <svg viewBox="0 0 12 12" aria-hidden="true">
+                    <path
+                      d="M2.75 2.75l6.5 6.5M9.25 2.75l-6.5 6.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="popup-bubble__dot popup-bubble__dot--minimize"
+                onClick={onMinimize}
+                aria-label="Minimize"
+                title="Minimize — collapse to dot"
+              >
+                <span className="popup-bubble__dot-icon" aria-hidden="true">
+                  <svg viewBox="0 0 12 12" aria-hidden="true">
+                    <path
+                      d="M2.5 6h7"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="popup-bubble__dot popup-bubble__dot--front"
+                onClick={onBringToFront}
+                aria-label="Bring to front"
+                title="Bring to front"
+              >
+                <span className="popup-bubble__dot-icon" aria-hidden="true">
+                  <svg viewBox="0 0 12 12" aria-hidden="true">
+                    <path
+                      d="M6 2.75v6.5M2.75 6h6.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </span>
+              </button>
+            </div>
+            <strong className="popup-bubble__title">Selection</strong>
           </div>
         )}
 
         <div className="popup-bubble__content">{children}</div>
-
-        {!compact && (
-          <div className="popup-bubble__actions">
-            <button
-              type="button"
-              className="popup-bubble__btn popup-bubble__btn--primary"
-              onClick={() => alert("Saved")}
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              className="popup-bubble__btn"
-              onClick={() => alert("Deleted")}
-            >
-              Delete
-            </button>
-          </div>
-        )}
 
         {compact && (
           <button

@@ -185,9 +185,23 @@ export default function OverlayApp({ toolbarMount }) {
     });
   };
 
+  const POPUP_Z_BASE = 2147483640;
+
+  const bringPopupToFront = (id) => {
+    setPopups((prev) => {
+      const idx = prev.findIndex((p) => p.id === id);
+      if (idx < 0 || idx === prev.length - 1) return prev;
+      const next = [...prev];
+      const [item] = next.splice(idx, 1);
+      next.push(item);
+      return next;
+    });
+  };
+
   /** Expand one selection; other open bubbles stay open until scroll collapses all. */
   const expandPopup = (id) => {
     if (expandedPopupIds.has(id)) return;
+    bringPopupToFront(id);
     resetScrollAccumulatedRef.current();
     if (morphTimerRef.current) clearTimeout(morphTimerRef.current);
     setMorphPopupId(id);
@@ -386,6 +400,10 @@ export default function OverlayApp({ toolbarMount }) {
             },
           },
         ]);
+        // New selections open expanded even when older bubbles are collapsed.
+        if (popupsCompactRef.current) {
+          addExpandedPopup(id);
+        }
       }
 
       const { width, height } = viewportRef.current;
@@ -484,7 +502,9 @@ export default function OverlayApp({ toolbarMount }) {
     bump();
   };
 
-  const closePopup = (id) => {
+  const removeSelection = (id) => {
+    polysRef.current = polysRef.current.filter((p) => p.id !== id);
+    anchorsRef.current.delete(id);
     setPopups((prev) => prev.filter((p) => p.id !== id));
     setExpandedPopupIds((prev) => {
       if (!prev.has(id)) return prev;
@@ -498,9 +518,37 @@ export default function OverlayApp({ toolbarMount }) {
       setMorphPopupId(null);
       clearExpandedPopups();
     }
+    redrawInk();
+    bump();
   };
 
-  const popupNodes = popups.map((p) => {
+  const minimizePopup = (id) => {
+    if (popupsCompact && !expandedPopupIds.has(id)) return;
+
+    resetScrollAccumulatedRef.current();
+    if (morphTimerRef.current) clearTimeout(morphTimerRef.current);
+    setMorphPopupId(id);
+    setBubbleMorph("collapse");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setPopupsCompact(true);
+        setExpandedPopupIds((prev) => {
+          if (!prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      });
+    });
+    morphTimerRef.current = setTimeout(() => {
+      setBubbleMorph(null);
+      setMorphPopupId(null);
+      morphTimerRef.current = null;
+      bump();
+    }, BUBBLE_MORPH_MS);
+  };
+
+  const popupNodes = popups.map((p, stackIndex) => {
     const poly = polysRef.current.find((poly) => poly.id === p.id);
     const anchor = getAnchor(p.id);
     const pos = clientPointFromAnchor(anchor, p.popupOffset);
@@ -527,7 +575,10 @@ export default function OverlayApp({ toolbarMount }) {
         morph={showMorph ? bubbleMorph : null}
         accentColor={colors.border}
         fillColor={colors.fill}
-        onClose={() => closePopup(p.id)}
+        zIndex={POPUP_Z_BASE + stackIndex}
+        onMinimize={() => minimizePopup(p.id)}
+        onDismiss={() => removeSelection(p.id)}
+        onBringToFront={() => bringPopupToFront(p.id)}
         onExpand={() => expandPopup(p.id)}
       >
         <div style={{ marginBottom: 6 }}>
