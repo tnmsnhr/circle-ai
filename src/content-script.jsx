@@ -15,10 +15,10 @@ import "./overlay.css";
 
   const host = document.createElement("div");
   host.setAttribute("id", "draw-on-web-root-host");
-  // Fixed layer + scroll offset: strokes use pageX/pageY (document space) but must
-  // move with the viewport as the user scrolls.
+  // In the document layer (not fixed) so lassos scroll and rubber-band bounce with the page.
+  // Strokes use pageX/pageY; mount on body (not <html>) so absolute coords track the document.
   host.style.cssText = [
-    "position:fixed",
+    "position:absolute",
     "left:0",
     "top:0",
     "width:0",
@@ -28,14 +28,15 @@ import "./overlay.css";
     "z-index:2147483647",
   ].join(";");
 
-  const syncHostScroll = () => {
-    host.style.transform = `translate3d(${-window.scrollX}px, ${-window.scrollY}px, 0)`;
+  const mountHost = () => {
+    const target = document.body;
+    if (!target) {
+      requestAnimationFrame(mountHost);
+      return;
+    }
+    target.appendChild(host);
   };
-  syncHostScroll();
-  window.addEventListener("scroll", syncHostScroll, { passive: true });
-  window.addEventListener("resize", syncHostScroll, { passive: true });
-
-  document.documentElement.appendChild(host);
+  mountHost();
 
   const shadow = host.attachShadow({ mode: "open" });
 
@@ -60,8 +61,7 @@ import "./overlay.css";
   const root = createRoot(mount);
   root.render(<OverlayApp />);
 
-  // OverlayApp sizes to the full page in document coordinates; syncHostScroll keeps
-  // the fixed host aligned with document scroll.
+  // OverlayApp sizes to the full page in document coordinates and moves with body.
   chrome.runtime.sendMessage({ type: "OFFSCREEN_PING" }, (res) => {
     console.log("[circle-ai] offscreen pong:", res);
   });
