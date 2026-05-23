@@ -8,7 +8,9 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: "dist",
-    emptyOutDir: true,
+    emptyOutDir: process.env.VITE_KEEP_DIST === "1" ? false : true,
+    sourcemap: process.env.VITE_KEEP_DIST === "1",
+    minify: process.env.VITE_KEEP_DIST !== "1",
     rollupOptions: {
       input: {
         popup: resolve(__dirname, "popup.html"),

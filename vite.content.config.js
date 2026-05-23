@@ -7,6 +7,8 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: false,
+    sourcemap: process.env.VITE_KEEP_DIST === "1",
+    minify: process.env.VITE_KEEP_DIST !== "1",
     lib: {
       entry: "src/content-script.jsx",
       name: "CircleAIContent",

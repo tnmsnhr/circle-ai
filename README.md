@@ -43,12 +43,30 @@ A powerful Chrome extension that allows you to draw circles or free-hand shapes 
 # Install dependencies
 npm install
 
-# Development mode
-npm run dev
-
-# Build for production
+# Production build (load dist/ in Chrome once per release)
 npm run build
+
+# Development: auto-rebuild on save (recommended)
+npm run dev:ext
 ```
+
+### Faster development (watch mode)
+
+Chrome extensions cannot hot-reload like a normal Vite web app, but you can avoid running `npm run build` by hand:
+
+1. **Once:** load the unpacked extension from `dist/` on `chrome://extensions`.
+2. **Leave running:** `npm run dev:ext` — rebuilds `dist/` whenever you save `src/`, `popup.html`, or `public/`.
+3. **After a rebuild** (terminal shows Vite finished):
+   - Click **Reload** on the extension card on `chrome://extensions`, **or** use the [Extensions Reloader](https://chromewebstore.google.com/detail/extensions-reloader/fimgfedafeadlieiabdeeaodndnlbhid) extension for a one-key shortcut.
+   - **Refresh the tab** you are testing on so the updated content script runs.
+
+| Change type | Reload extension? | Refresh page? |
+|-------------|-------------------|---------------|
+| Popup UI (`src/popup/`) | Yes | Reopen popup |
+| Content script / overlay | Yes | Yes |
+| `public/background.js` | Yes | Usually no |
+
+`npm run dev` only runs the Vite dev server for the popup HTML in isolation; it does **not** update the loaded extension. Use `npm run dev:ext` for extension work.
 
 ### Project Structure
 ```
