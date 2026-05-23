@@ -27,7 +27,7 @@ const extensionCss = `${overlayCss}\n${popupBubbleCss}`;
   ].join(";");
 
   const toolbarMount = document.createElement("div");
-  toolbarMount.id = "circle-ai-toolbar-mount";
+  toolbarMount.id = "syncle-toolbar-mount";
   toolbarMount.style.cssText = [
     "position:fixed",
     "inset:0",
@@ -36,7 +36,7 @@ const extensionCss = `${overlayCss}\n${popupBubbleCss}`;
   ].join(";");
 
   const pageStyle = document.createElement("style");
-  pageStyle.id = "circle-ai-page-styles";
+  pageStyle.id = "syncle-page-styles";
   pageStyle.textContent = extensionCss;
 
   document.documentElement.appendChild(host);

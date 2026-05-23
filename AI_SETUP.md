@@ -1,6 +1,6 @@
 # AI Integration Setup Guide
 
-This guide will help you set up real AI analysis for your Circle AI Assistant extension.
+This guide will help you set up real AI analysis for your Syncle extension.
 
 ## 🚀 Quick Start (Simulated Mode)
 
@@ -156,7 +156,7 @@ The extension includes robust error handling:
 
 Enable debug logging by adding this to your browser console:
 ```javascript
-localStorage.setItem('circle-ai-debug', 'true');
+localStorage.setItem('syncle-debug', 'true');
 ```
 
 ## 🔒 Security Notes

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Draw on Any Page (React)",
+  "name": "Syncle",
   "version": "1.0.0",
-  "description": "Hold Cmd (Meta) to freehand draw on any webpage. Strokes scroll with the page.",
+  "description": "Hold ⌘ or Ctrl and lasso areas on any webpage. Selections and chat bubbles stay pinned while you scroll.",
   "permissions": ["tabs", "activeTab", "scripting", "offscreen", "storage"],
   "host_permissions": ["<all_urls>"],
   "content_scripts": [
@@ -13,7 +13,7 @@
     }
   ],
   "action": {
-    "default_title": "Draw on Any Page",
+    "default_title": "Syncle",
     "default_icon": "icon.png",
     "default_popup": "popup.html"
   },

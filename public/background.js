@@ -16,7 +16,7 @@ async function ensureOffscreen() {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log("[circle-ai] background installed & running");
+  console.log("[syncle] background installed & running");
 });
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {

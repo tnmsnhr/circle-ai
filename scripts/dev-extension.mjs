@@ -88,7 +88,7 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 console.log(`
-[dev:ext] Circle AI — extension dev watch
+[dev:ext] Syncle — extension dev watch
 ────────────────────────────────────────
   • Rebuilds dist/ when you save src/ or popup.html
   • Load unpacked from dist/ once in chrome://extensions

@@ -11,7 +11,7 @@ export default defineConfig({
     minify: process.env.VITE_KEEP_DIST !== "1",
     lib: {
       entry: "src/content-script.jsx",
-      name: "CircleAIContent",
+      name: "SyncleContent",
       formats: ["iife"],
       fileName: () => "content-script.js",
     },

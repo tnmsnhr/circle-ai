@@ -82,7 +82,7 @@ export default function PopupApp() {
 
   return (
     <div className="popup-app">
-      <h1>Circle AI</h1>
+      <h1>Syncle</h1>
       <p className="subtitle">Configure how the extension behaves on pages.</p>
 
       <section className="popup-section">
@@ -160,7 +160,7 @@ export default function PopupApp() {
         {status}
       </p>
 
-      <p className="popup-footer">Draw on Any Page · v1.0.0</p>
+      <p className="popup-footer">Syncle · v1.0.0</p>
     </div>
   );
 }

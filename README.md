@@ -1,6 +1,6 @@
-# Circle AI Assistant Chrome Extension
+# Syncle Chrome Extension
 
-A powerful Chrome extension that allows you to draw circles or free-hand shapes on any webpage and get AI-powered analysis of the selected content.
+Syncle lets you lasso areas on any webpage and attach chat-style bubbles that stay pinned while you scroll.
 
 ## Features
 
@@ -70,7 +70,7 @@ Chrome extensions cannot hot-reload like a normal Vite web app, but you can avoi
 
 ### Project Structure
 ```
-circle-ai-extension/
+syncle-extension/
 ├── src/
 │   ├── components/
 │   │   ├── CircleOverlay.jsx    # Drawing canvas overlay
