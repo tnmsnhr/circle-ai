@@ -5,6 +5,8 @@ import {
   applyThemeToDocument,
   LASSO_THEMES,
 } from "./settings.js";
+import { loadSession } from "../auth/session.js";
+import { signInWithGoogle, signOut } from "../auth/googleSignIn.js";
 
 export default function PopupApp() {
   const [theme, setTheme] = useState("system");
@@ -13,13 +15,16 @@ export default function PopupApp() {
   const [autoCollapse, setAutoCollapse] = useState(true);
   const [status, setStatus] = useState("");
   const [ready, setReady] = useState(false);
+  const [accountEmail, setAccountEmail] = useState(null);
+  const [authBusy, setAuthBusy] = useState(false);
 
   useEffect(() => {
-    loadSettings().then((s) => {
+    Promise.all([loadSettings(), loadSession()]).then(([s, session]) => {
       setTheme(s.theme);
       setLassoTheme(s.lassoTheme);
       setEnabled(s.enabled);
       setAutoCollapse(s.autoCollapse !== false);
+      setAccountEmail(session?.user?.email ?? null);
       applyThemeToDocument(s.theme);
       setReady(true);
     });
@@ -63,6 +68,32 @@ export default function PopupApp() {
     );
   };
 
+  const onSignIn = async () => {
+    setAuthBusy(true);
+    try {
+      const data = await signInWithGoogle();
+      setAccountEmail(data.user?.email ?? "Signed in");
+      setStatus("Signed in with Google");
+    } catch (err) {
+      setStatus(err.message || "Sign-in failed");
+    } finally {
+      setAuthBusy(false);
+      setTimeout(() => setStatus(""), 3000);
+    }
+  };
+
+  const onSignOut = async () => {
+    setAuthBusy(true);
+    try {
+      await signOut();
+      setAccountEmail(null);
+      setStatus("Signed out");
+    } finally {
+      setAuthBusy(false);
+      setTimeout(() => setStatus(""), 1500);
+    }
+  };
+
   const onAutoCollapseChange = async (e) => {
     const value = e.target.checked;
     setAutoCollapse(value);
@@ -84,6 +115,40 @@ export default function PopupApp() {
     <div className="popup-app">
       <h1>Syncle</h1>
       <p className="subtitle">Configure how the extension behaves on pages.</p>
+
+      <section className="popup-section">
+        <h2>Account</h2>
+        <p className="hint section-hint">
+          Sign in to register page context with syncle-services (localhost:3001
+          by default).
+        </p>
+        {accountEmail ? (
+          <p className="account-email">{accountEmail}</p>
+        ) : (
+          <p className="hint">Not signed in — extraction works locally only.</p>
+        )}
+        <div className="account-actions">
+          {accountEmail ? (
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={authBusy}
+              onClick={onSignOut}
+            >
+              Sign out
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={authBusy}
+              onClick={onSignIn}
+            >
+              {authBusy ? "Signing in…" : "Sign in with Google"}
+            </button>
+          )}
+        </div>
+      </section>
 
       <section className="popup-section">
         <h2>Lasso colors</h2>

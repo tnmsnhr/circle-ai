@@ -18,6 +18,31 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
+  if (msg?.type === "OFFSCREEN_CROP_RECT") {
+    (async () => {
+      try {
+        const {
+          dataUrl,
+          rect,
+          devicePixelRatio = 1,
+          maxWidth = 1280,
+          quality = 0.82,
+        } = msg.payload || {};
+        const result = await cropRectDataUrl(
+          dataUrl,
+          rect,
+          devicePixelRatio,
+          maxWidth,
+          quality
+        );
+        sendResponse(result);
+      } catch (e) {
+        sendResponse({ error: String(e) });
+      }
+    })();
+    return true;
+  }
+
   if (msg?.type === "OFFSCREEN_CROP") {
     (async () => {
       try {
@@ -94,5 +119,59 @@ async function cropPolygonDataUrl(dataUrl, polygonCss, dpr, withPreview) {
   });
 
   return { width, height, dataUrl: dataUrlOut };
+}
+
+/** Crop CSS rect from full tab screenshot; resize + JPEG for AI payload. */
+async function cropRectDataUrl(
+  dataUrl,
+  rectCss,
+  dpr,
+  maxWidth,
+  quality
+) {
+  const blob = await (await fetch(dataUrl)).blob();
+  const bitmap = await createImageBitmap(blob);
+
+  const sx = Math.max(0, Math.floor(rectCss.left * dpr));
+  const sy = Math.max(0, Math.floor(rectCss.top * dpr));
+  const sw = Math.max(
+    1,
+    Math.min(bitmap.width - sx, Math.ceil(rectCss.width * dpr))
+  );
+  const sh = Math.max(
+    1,
+    Math.min(bitmap.height - sy, Math.ceil(rectCss.height * dpr))
+  );
+
+  let dw = sw;
+  let dh = sh;
+  if (dw > maxWidth) {
+    const scale = maxWidth / dw;
+    dw = maxWidth;
+    dh = Math.max(1, Math.round(sh * scale));
+  }
+
+  const canvas = new OffscreenCanvas(dw, dh);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, dw, dh);
+
+  const outBlob = await canvas.convertToBlob({
+    type: "image/jpeg",
+    quality,
+  });
+  const buffer = await outBlob.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+
+  return {
+    ok: true,
+    cropImageBase64: btoa(binary),
+    width: dw,
+    height: dh,
+    mimeType: "image/jpeg",
+  };
 }
   

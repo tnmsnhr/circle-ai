@@ -61,6 +61,55 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
+  if (msg?.type === "EXTRACTION_CAPTURE_CROP") {
+    (async () => {
+      try {
+        const {
+          rect,
+          devicePixelRatio = 1,
+          maxWidth = 1280,
+          quality = 0.82,
+        } = msg.payload || {};
+        if (!rect || rect.width < 1 || rect.height < 1) {
+          throw new Error("EXTRACTION_CAPTURE_CROP: invalid rect");
+        }
+
+        const [tab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        if (!tab?.windowId) {
+          throw new Error("No active tab for capture");
+        }
+
+        const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, {
+          format: "png",
+        });
+
+        await ensureOffscreen();
+        const result = await chrome.runtime.sendMessage({
+          type: "OFFSCREEN_CROP_RECT",
+          payload: { dataUrl, rect, devicePixelRatio, maxWidth, quality },
+        });
+
+        if (result?.error) {
+          throw new Error(result.error);
+        }
+
+        sendResponse({
+          ok: true,
+          cropImageBase64: result.cropImageBase64,
+          width: result.width,
+          height: result.height,
+        });
+      } catch (e) {
+        console.error("EXTRACTION_CAPTURE_CROP error:", e);
+        sendResponse({ ok: false, error: String(e) });
+      }
+    })();
+    return true;
+  }
+
   if (msg?.type === "CROP_TEST") {
   (async () => {
     try {

@@ -20,6 +20,7 @@ import {
   getLassoTheme,
   DEFAULT_LASSO_THEME_ID,
 } from "./utils";
+import { runSelectionExtraction } from "./extraction/runExtraction.js";
 
 const isHotkey = (e) => e.metaKey || e.ctrlKey;
 
@@ -404,7 +405,8 @@ export default function OverlayApp({ toolbarMount }) {
             popupOffset,
             content: {
               bbox: bboxOf(pagePts),
-              text: "dummy text",
+              text: "",
+              extractStatus: "loading",
             },
           },
         ]);
@@ -412,6 +414,48 @@ export default function OverlayApp({ toolbarMount }) {
         if (popupsCompactRef.current) {
           addExpandedPopup(id);
         }
+
+        runSelectionExtraction(clientPts)
+          .then((extracted) => {
+            const preview =
+              extracted.focus.text?.slice(0, 280) ||
+              (extracted.focus.cropImageBase64
+                ? `[Visual: ${extracted.meta.extractionStrategy}]`
+                : "");
+            setPopups((prev) =>
+              prev.map((p) =>
+                p.id === id
+                  ? {
+                      ...p,
+                      content: {
+                        ...p.content,
+                        text: preview,
+                        extracted,
+                        aiPayload: extracted.aiPayload,
+                        extractStatus: "ready",
+                      },
+                    }
+                  : p
+              )
+            );
+          })
+          .catch((err) => {
+            console.warn("[syncle] extraction failed:", err);
+            setPopups((prev) =>
+              prev.map((p) =>
+                p.id === id
+                  ? {
+                      ...p,
+                      content: {
+                        ...p.content,
+                        text: "Could not extract selection.",
+                        extractStatus: "error",
+                      },
+                    }
+                  : p
+              )
+            );
+          });
       }
 
       const { width, height } = viewportRef.current;
@@ -602,8 +646,22 @@ export default function OverlayApp({ toolbarMount }) {
           </div>
         </div>
         <div style={{ marginTop: 6 }}>
-          <b>Text:</b> {p.content.text || <i>No text detected</i>}
+          <b>Extract:</b>{" "}
+          {p.content.extractStatus === "loading" ? (
+            <i>Analyzing selection…</i>
+          ) : p.content.extractStatus === "error" ? (
+            <i>{p.content.text || "Extraction failed"}</i>
+          ) : p.content.text ? (
+            p.content.text
+          ) : (
+            <i>No text detected</i>
+          )}
         </div>
+        {p.content.extracted?.meta?.extractionStrategy && (
+          <div style={{ marginTop: 4, fontSize: 11, opacity: 0.7 }}>
+            Strategy: {p.content.extracted.meta.extractionStrategy}
+          </div>
+        )}
       </PopupBubble>
     );
 

@@ -1,0 +1,57 @@
+{
+  "source": {
+    "type": "mixed",
+    "url": "https://example.com/products/widget-pro",
+    "title": "Widget Pro — Example Shop",
+    "domain": "example.com"
+  },
+  "focus": {
+    "text": "Widget Pro\n$49.99\nIn stock · Free shipping\n4.8★ (1,240 reviews)",
+    "cropImageBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBD…",
+    "elementTypes": ["image", "text", "table"]
+  },
+  "context": {
+    "nearbyText": "Home › Electronics › Gadgets\nCompare plans\nAdd to cart",
+    "ancestorText": "Widget Pro\nThe best widget for everyday use.\nShips in 2–3 business days.",
+    "headings": ["Widget Pro", "Customers also bought"],
+    "captions": ["Product hero image"],
+    "links": [
+      { "text": "Add to cart", "href": "https://example.com/cart" },
+      { "text": "Reviews", "href": "https://example.com/products/widget-pro#reviews" }
+    ],
+    "tableHeaders": ["Feature", "Widget Pro", "Widget Lite"],
+    "pageTitle": "Widget Pro — Example Shop",
+    "metaDescription": "Buy Widget Pro with free shipping.",
+    "h1": "Widget Pro"
+  },
+  "media": {
+    "images": [
+      {
+        "src": "https://example.com/images/widget-pro-hero.jpg",
+        "alt": "Widget Pro on a desk",
+        "title": "",
+        "figcaption": "Product hero image",
+        "isPartialSelection": true
+      }
+    ],
+    "svg": [],
+    "pdf": {}
+  },
+  "meta": {
+    "selectionRect": {
+      "left": 120,
+      "top": 200,
+      "right": 420,
+      "bottom": 480,
+      "width": 300,
+      "height": 280
+    },
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "devicePixelRatio": 2
+    },
+    "extractionStrategy": "visual-with-dom",
+    "capturedAt": "2026-05-23T12:00:00.000Z"
+  }
+}
