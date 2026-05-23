@@ -15,6 +15,11 @@ import {
   applyThemeToDocument,
   isDrawingEnabled,
 } from "./settings";
+import {
+  LASSO_THEMES,
+  DEFAULT_LASSO_THEME_ID,
+  getLassoTheme,
+} from "./lassoThemes";
 
 export {
   getPageSize,
@@ -30,4 +35,7 @@ export {
   saveSettings,
   applyThemeToDocument,
   isDrawingEnabled,
+  LASSO_THEMES,
+  DEFAULT_LASSO_THEME_ID,
+  getLassoTheme,
 };

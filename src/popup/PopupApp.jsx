@@ -3,10 +3,12 @@ import {
   loadSettings,
   saveSettings,
   applyThemeToDocument,
+  LASSO_THEMES,
 } from "./settings.js";
 
 export default function PopupApp() {
   const [theme, setTheme] = useState("system");
+  const [lassoTheme, setLassoTheme] = useState("emerald");
   const [enabled, setEnabled] = useState(true);
   const [status, setStatus] = useState("");
   const [ready, setReady] = useState(false);
@@ -14,6 +16,7 @@ export default function PopupApp() {
   useEffect(() => {
     loadSettings().then((s) => {
       setTheme(s.theme);
+      setLassoTheme(s.lassoTheme);
       setEnabled(s.enabled);
       applyThemeToDocument(s.theme);
       setReady(true);
@@ -40,13 +43,22 @@ export default function PopupApp() {
     const value = e.target.value;
     setTheme(value);
     applyThemeToDocument(value);
-    await persist({ theme: value }, "Theme updated");
+    await persist({ theme: value }, "Panel theme updated");
+  };
+
+  const onLassoThemeSelect = async (id) => {
+    setLassoTheme(id);
+    const name = LASSO_THEMES.find((t) => t.id === id)?.name ?? id;
+    await persist({ lassoTheme: id }, `${name} lasso colors applied`);
   };
 
   const onEnabledChange = async (e) => {
     const value = e.target.checked;
     setEnabled(value);
-    await persist({ enabled: value }, value ? "Extension enabled" : "Extension disabled");
+    await persist(
+      { enabled: value },
+      value ? "Extension enabled" : "Extension disabled"
+    );
   };
 
   if (!ready) {
@@ -63,16 +75,41 @@ export default function PopupApp() {
       <p className="subtitle">Configure how the extension behaves on pages.</p>
 
       <section className="popup-section">
-        <h2>Appearance</h2>
+        <h2>Lasso colors</h2>
+        <p className="hint section-hint">
+          Border and fill for selections on the page.
+        </p>
+        <div className="lasso-theme-grid" role="listbox" aria-label="Lasso color theme">
+          {LASSO_THEMES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="option"
+              aria-selected={lassoTheme === t.id}
+              className={`lasso-theme-swatch${lassoTheme === t.id ? " is-selected" : ""}`}
+              title={t.name}
+              onClick={() => onLassoThemeSelect(t.id)}
+            >
+              <span
+                className="lasso-theme-swatch__ring"
+                style={{ borderColor: t.border, background: t.fill }}
+              />
+              <span className="lasso-theme-swatch__label">{t.name}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="popup-section">
+        <h2>Popup appearance</h2>
         <div className="field">
-          <label htmlFor="theme">Theme</label>
+          <label htmlFor="theme">Panel theme</label>
           <select id="theme" value={theme} onChange={onThemeChange}>
             <option value="system">System</option>
             <option value="light">Light</option>
             <option value="dark">Dark</option>
           </select>
         </div>
-        <p className="hint">Applies to this settings panel. Page overlay theming coming soon.</p>
       </section>
 
       <section className="popup-section">
@@ -89,7 +126,7 @@ export default function PopupApp() {
             <span />
           </label>
         </div>
-        <p className="hint">Hold ⌘ and drag on any page to draw a selection.</p>
+        <p className="hint">Hold ⌘ or Ctrl and drag on any page to draw.</p>
       </section>
 
       <p className="status" aria-live="polite">

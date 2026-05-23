@@ -153,3 +153,56 @@ body {
   color: var(--muted);
   text-align: center;
 }
+
+.section-hint {
+  margin-bottom: 10px;
+}
+
+.lasso-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.lasso-theme-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+}
+
+.lasso-theme-swatch:hover {
+  background: var(--bg);
+}
+
+.lasso-theme-swatch.is-selected {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.lasso-theme-swatch__ring {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid;
+  box-sizing: border-box;
+}
+
+.lasso-theme-swatch__label {
+  font-size: 9px;
+  line-height: 1.1;
+  color: var(--muted);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,13 +1,20 @@
+import { DEFAULT_LASSO_THEME_ID } from "./lassoThemes.js";
+
 export const DEFAULT_SETTINGS = {
   theme: "system",
   enabled: true,
+  lassoTheme: DEFAULT_LASSO_THEME_ID,
 };
 
 export function loadSettings() {
   return new Promise((resolve) => {
     try {
       chrome.storage.sync.get(DEFAULT_SETTINGS, (items) => {
-        resolve({ ...DEFAULT_SETTINGS, ...items });
+        const merged = { ...DEFAULT_SETTINGS, ...items };
+        if (!merged.lassoTheme) {
+          merged.lassoTheme = DEFAULT_LASSO_THEME_ID;
+        }
+        resolve(merged);
       });
     } catch {
       resolve({ ...DEFAULT_SETTINGS });

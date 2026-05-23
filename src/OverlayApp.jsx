@@ -13,6 +13,8 @@ import {
   offsetsFromClientPoints,
   loadSettings,
   isDrawingEnabled,
+  getLassoTheme,
+  DEFAULT_LASSO_THEME_ID,
 } from "./utils";
 
 const isHotkey = (e) => e.metaKey || e.ctrlKey;
@@ -25,6 +27,7 @@ export default function OverlayApp({ toolbarMount }) {
 
   const drawingEnabledRef = useRef(true);
   const isDrawingRef = useRef(false);
+  const lassoThemeRef = useRef(getLassoTheme(DEFAULT_LASSO_THEME_ID));
   const viewportRef = useRef(viewport);
   viewportRef.current = viewport;
 
@@ -51,9 +54,10 @@ export default function OverlayApp({ toolbarMount }) {
     if (!ctx) return;
     const { width, height } = viewportRef.current;
     ctx.clearRect(0, 0, width, height);
+    const colors = lassoThemeRef.current;
     ctx.lineWidth = 2;
-    ctx.strokeStyle = "#22c55e";
-    ctx.fillStyle = "rgba(34,197,94,0.12)";
+    ctx.strokeStyle = colors.border;
+    ctx.fillStyle = colors.fill;
 
     for (const poly of polysRef.current) {
       const anchor = getAnchor(poly.id) || poly.anchor;
@@ -92,7 +96,7 @@ export default function OverlayApp({ toolbarMount }) {
       ctx.lineTo(pts[0].clientX, pts[0].clientY);
     }
 
-    ctx.strokeStyle = "#00b3ff";
+    ctx.strokeStyle = lassoThemeRef.current.border;
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 6]);
     ctx.stroke();
@@ -185,16 +189,27 @@ export default function OverlayApp({ toolbarMount }) {
       const on = isDrawingEnabled(s);
       drawingEnabledRef.current = on;
       setDrawingEnabled(on);
+      lassoThemeRef.current = getLassoTheme(s.lassoTheme);
+      redrawInk();
     });
 
     const onStorageChange = (changes, area) => {
-      if (area !== "sync" || changes.enabled === undefined) return;
-      const on = changes.enabled.newValue !== false;
-      drawingEnabledRef.current = on;
-      setDrawingEnabled(on);
-      if (!on) {
-        cancelLive();
-        setHotkeyReady(false);
+      if (area !== "sync") return;
+
+      if (changes.enabled !== undefined) {
+        const on = changes.enabled.newValue !== false;
+        drawingEnabledRef.current = on;
+        setDrawingEnabled(on);
+        if (!on) {
+          cancelLive();
+          setHotkeyReady(false);
+        }
+      }
+
+      if (changes.lassoTheme !== undefined) {
+        lassoThemeRef.current = getLassoTheme(changes.lassoTheme.newValue);
+        redrawInk();
+        if (isDrawingRef.current) drawLive();
       }
     };
     chrome.storage.onChanged.addListener(onStorageChange);
