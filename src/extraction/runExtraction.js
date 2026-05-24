@@ -3,39 +3,56 @@
  */
 import { buildExtractedContextFromPoints } from "./buildExtractedContext.ts";
 import { logAiPayload } from "./buildAiPayload.ts";
-import { registerExtractedContext } from "../api/registerContext.js";
+import { ensureContextRegistered } from "../api/registerContext.js";
+import { CLOUD_SYNC_ENABLED } from "../config/features.js";
 
 /**
  * @param {Array<{ x: number, y: number }>} clientPoints
  * @param {string} [selectionId]
+ * @param {(result: import('../api/registerContext.js').RegisterContextResult) => void} [onRegisterUpdate]
  * @returns {Promise<import('./types').ExtractedContext>}
  */
-export function runSelectionExtraction(clientPoints, selectionId) {
-  return buildExtractedContextFromPoints(clientPoints).then(async (extracted) => {
-    if (extracted.aiPayload) {
-      logAiPayload(extracted.aiPayload, selectionId);
-    }
-
-    if (selectionId) {
+export function runSelectionExtraction(clientPoints, selectionId, onRegisterUpdate) {
+  return buildExtractedContextFromPoints(clientPoints)
+    .then(async (extracted) => {
       try {
-        const registered = await registerExtractedContext(extracted, selectionId);
-        if (registered) {
-          extracted.optimizedPayload = registered.optimizedPayload;
-          extracted.contextIds = {
-            pageContextId: registered.pageContextId,
-            selectionContextId: registered.selectionContextId,
-          };
-          console.info(
-            "[syncle] registered context",
-            registered.pageContextId,
-            registered.selectionContextId
-          );
+        if (extracted.aiPayload) {
+          logAiPayload(extracted.aiPayload, selectionId);
+        }
+
+        if (selectionId && CLOUD_SYNC_ENABLED) {
+          try {
+            const result = await ensureContextRegistered(extracted, selectionId);
+            if (result.ok) {
+              extracted.optimizedPayload = result.optimizedPayload;
+              extracted.contextIds = {
+                pageContextId: result.pageContextId,
+                selectionContextId: result.selectionContextId,
+              };
+              console.info(
+                "[syncle] registered context",
+                result.pageContextId,
+                result.selectionContextId
+              );
+            } else {
+              console.warn("[syncle] context register:", result);
+            }
+            onRegisterUpdate?.(result);
+          } catch (err) {
+            const message =
+              err instanceof Error ? err.message : "Registration failed";
+            console.warn("[syncle] context register error:", err);
+            onRegisterUpdate?.({ ok: false, reason: "error", message });
+          }
         }
       } catch (err) {
-        console.warn("[syncle] context register failed:", err);
+        console.warn("[syncle] post-extract error:", err);
       }
-    }
 
-    return extracted;
-  });
+      return extracted;
+    })
+    .catch((err) => {
+      console.error("[syncle] extraction pipeline failed:", err);
+      throw err;
+    });
 }

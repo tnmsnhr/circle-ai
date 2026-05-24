@@ -1,5 +1,6 @@
 .popup-bubble {
   --bubble-width: min(280px, calc(100vw - 32px));
+  --bubble-max-height: min(420px, calc(100vh - 48px));
   position: fixed;
   left: var(--bubble-x);
   top: var(--bubble-y);
@@ -19,6 +20,10 @@
   transform: translate(0, 0) scale(1);
   /* Position snaps every frame while scrolling — no transition here */
   transition: none;
+}
+
+.popup-bubble:not(.popup-bubble--compact) {
+  max-height: var(--bubble-max-height);
 }
 
 /* One-shot morph when collapsing or expanding */
@@ -68,6 +73,14 @@
   box-sizing: border-box;
 }
 
+.popup-bubble:not(.popup-bubble--compact) .popup-bubble__inner {
+  display: flex;
+  flex-direction: column;
+  max-height: var(--bubble-max-height);
+  min-height: 0;
+  overflow: hidden;
+}
+
 .popup-bubble--compact .popup-bubble__inner {
   padding: 0;
 }
@@ -77,6 +90,7 @@
   grid-template-columns: 1fr;
   align-items: center;
   margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .popup-bubble__traffic {
@@ -169,6 +183,31 @@
   opacity: 1;
   transform: scale(1);
   transform-origin: top left;
+}
+
+.popup-bubble:not(.popup-bubble--compact) .popup-bubble__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
+}
+
+.popup-bubble:not(.popup-bubble--compact) .popup-bubble__content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.popup-bubble:not(.popup-bubble--compact) .popup-bubble__content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 3px;
+}
+
+.popup-bubble:not(.popup-bubble--compact) .popup-bubble__content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.32);
 }
 
 .popup-bubble--morph .popup-bubble__content {

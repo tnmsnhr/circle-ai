@@ -1,5 +1,6 @@
 import type { SelectionRect } from "../types.js";
 import { intersectionArea, rectsIntersect, elementBox } from "../geometry/rect.js";
+import { filterPageElements } from "./pageHitTest.js";
 import { isVisible } from "./visibility.js";
 
 const MEDIA_SELECTOR =
@@ -32,7 +33,7 @@ export function getElementsIntersectingRect(
     for (let iy = 0; iy <= steps; iy++) {
       const x = rect.left + (rect.width * ix) / steps;
       const y = rect.top + (rect.height * iy) / steps;
-      const stack = document.elementsFromPoint(x, y);
+      const stack = filterPageElements(document.elementsFromPoint(x, y));
       for (const el of stack) {
         add(el);
         if (el.parentElement) add(el.parentElement);

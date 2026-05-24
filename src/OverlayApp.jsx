@@ -21,6 +21,10 @@ import {
   DEFAULT_LASSO_THEME_ID,
 } from "./utils";
 import { runSelectionExtraction } from "./extraction/runExtraction.js";
+import { ensureContextRegistered } from "./api/registerContext.js";
+import { isSignedIn } from "./auth/session.js";
+import { CLOUD_SYNC_ENABLED } from "./config/features.js";
+import ExtractionPanel from "./components/ExtractionPanel.jsx";
 
 const isHotkey = (e) => e.metaKey || e.ctrlKey;
 
@@ -37,6 +41,7 @@ export default function OverlayApp({ toolbarMount }) {
   const viewportRef = useRef(viewport);
   viewportRef.current = viewport;
 
+  const [signedIn, setSignedIn] = useState(false);
   const [popups, setPopups] = useState([]);
   const [popupsCompact, setPopupsCompact] = useState(false);
   const [bubbleMorph, setBubbleMorph] = useState(null);
@@ -312,8 +317,12 @@ export default function OverlayApp({ toolbarMount }) {
       lassoThemeRef.current = getLassoTheme(s.lassoTheme);
       redrawInk();
     });
+    isSignedIn().then(setSignedIn);
 
     const onStorageChange = (changes, area) => {
+      if (area === "local" && changes.syncle_session) {
+        isSignedIn().then(setSignedIn);
+      }
       if (area !== "sync") return;
 
       if (changes.enabled !== undefined) {
@@ -407,6 +416,10 @@ export default function OverlayApp({ toolbarMount }) {
               bbox: bboxOf(pagePts),
               text: "",
               extractStatus: "loading",
+              chatDraft: "",
+              chatReply: "",
+              chatStatus: "idle",
+              registerStatus: CLOUD_SYNC_ENABLED ? "extracting" : "local",
             },
           },
         ]);
@@ -415,31 +428,107 @@ export default function OverlayApp({ toolbarMount }) {
           addExpandedPopup(id);
         }
 
-        runSelectionExtraction(clientPts, id)
+        const registerWatchdog = setTimeout(() => {
+          setPopups((prev) =>
+            prev.map((p) =>
+              p.id === id &&
+              (p.content.registerStatus === "pending" ||
+                p.content.registerStatus === "extracting")
+                ? {
+                    ...p,
+                    content: {
+                      ...p.content,
+                      registerStatus: "error",
+                      registerError:
+                        "Register timed out. Reload the extension and ensure syncle-services is on :3001.",
+                    },
+                  }
+                : p
+            )
+          );
+        }, 40000);
+
+        const runExtract = () =>
+          runSelectionExtraction(clientPts, id, (registerResult) => {
+            clearTimeout(registerWatchdog);
+            if (registerResult.ok) {
+              setPopups((prev) =>
+                prev.map((p) =>
+                  p.id === id
+                    ? {
+                        ...p,
+                        content: {
+                          ...p.content,
+                          contextIds: {
+                            pageContextId: registerResult.pageContextId,
+                            selectionContextId: registerResult.selectionContextId,
+                          },
+                          registerStatus: "ready",
+                          registerError: "",
+                        },
+                      }
+                    : p
+                )
+              );
+            } else {
+              setPopups((prev) =>
+                prev.map((p) =>
+                  p.id === id
+                    ? {
+                        ...p,
+                        content: {
+                          ...p.content,
+                          registerStatus:
+                            registerResult.reason === "not_signed_in"
+                              ? "no_session"
+                              : "error",
+                          registerError: registerResult.message || "",
+                        },
+                      }
+                    : p
+                )
+              );
+            }
+          })
           .then((extracted) => {
             const preview =
-              extracted.focus.text?.slice(0, 280) ||
+              extracted.selectionEvidence?.candidates?.[0]?.text?.trim().slice(0, 280) ||
+              extracted.focus.text?.trim().slice(0, 280) ||
               (extracted.focus.cropImageBase64
                 ? `[Visual: ${extracted.meta.extractionStrategy}]`
                 : "");
             setPopups((prev) =>
-              prev.map((p) =>
-                p.id === id
-                  ? {
-                      ...p,
-                      content: {
-                        ...p.content,
-                        text: preview,
-                        extracted,
-                        aiPayload: extracted.aiPayload,
-                        extractStatus: "ready",
-                      },
-                    }
-                  : p
-              )
+              prev.map((p) => {
+                if (p.id !== id) return p;
+                const reg = p.content.registerStatus;
+                const registerStatus = !CLOUD_SYNC_ENABLED
+                  ? "local"
+                  : extracted.contextIds
+                    ? "ready"
+                    : reg === "ready" || reg === "error" || reg === "no_session"
+                      ? reg
+                      : reg === "extracting"
+                        ? "pending"
+                        : reg;
+                const contextIds =
+                  extracted.contextIds ?? p.content.contextIds;
+                return {
+                  ...p,
+                  content: {
+                    ...p.content,
+                    text: preview,
+                    extracted,
+                    aiPayload: extracted.aiPayload,
+                    contextIds,
+                    extractStatus: "ready",
+                    registerStatus,
+                  },
+                };
+              })
             );
           })
           .catch((err) => {
+            clearTimeout(registerWatchdog);
             console.warn("[syncle] extraction failed:", err);
             setPopups((prev) =>
               prev.map((p) =>
@@ -450,12 +539,22 @@ export default function OverlayApp({ toolbarMount }) {
                         ...p.content,
                         text: "Could not extract selection.",
                         extractStatus: "error",
+                        registerStatus: "error",
+                        registerError:
+                          err instanceof Error
+                            ? err.message
+                            : String(err),
                       },
                     }
                   : p
               )
             );
           });
+
+        // Defer so the popup bubble is not the topmost hit target for caret/element sampling.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(runExtract);
+        });
       }
 
       const { width, height } = viewportRef.current;
@@ -555,6 +654,7 @@ export default function OverlayApp({ toolbarMount }) {
   };
 
   const removeSelection = (id) => {
+    autoSummaryStartedRef.current.delete(id);
     polysRef.current = polysRef.current.filter((p) => p.id !== id);
     anchorsRef.current.delete(id);
     setPopups((prev) => prev.filter((p) => p.id !== id));
@@ -598,6 +698,14 @@ export default function OverlayApp({ toolbarMount }) {
       morphTimerRef.current = null;
       bump();
     }, BUBBLE_MORPH_MS);
+  };
+
+  const updatePopupContent = (popupId, patch) => {
+    setPopups((prev) =>
+      prev.map((p) =>
+        p.id === popupId ? { ...p, content: { ...p.content, ...patch } } : p
+      )
+    );
   };
 
   const popupNodes = popups.map((p, stackIndex) => {
@@ -645,22 +753,36 @@ export default function OverlayApp({ toolbarMount }) {
             {Math.round(p.content.bbox.h)} px
           </div>
         </div>
-        <div style={{ marginTop: 6 }}>
-          <b>Extract:</b>{" "}
-          {p.content.extractStatus === "loading" ? (
-            <i>Analyzing selection…</i>
-          ) : p.content.extractStatus === "error" ? (
-            <i>{p.content.text || "Extraction failed"}</i>
-          ) : p.content.text ? (
-            p.content.text
-          ) : (
-            <i>No text detected</i>
-          )}
-        </div>
-        {p.content.extracted?.meta?.extractionStrategy && (
-          <div style={{ marginTop: 4, fontSize: 11, opacity: 0.7 }}>
-            Strategy: {p.content.extracted.meta.extractionStrategy}
+        {p.content.extractStatus === "loading" && (
+          <div style={{ marginTop: 6 }}>
+            <b>Extracting…</b> <i>Reading selection locally</i>
           </div>
+        )}
+        {p.content.extractStatus === "error" && (
+          <div style={{ marginTop: 6 }}>
+            <b>Extract failed:</b>{" "}
+            <i>
+              {p.content.registerError ||
+                p.content.text ||
+                "Could not read selection"}
+            </i>
+          </div>
+        )}
+        {p.content.extractStatus === "ready" && p.content.extracted && (
+          <ExtractionPanel
+            extracted={p.content.extracted}
+            registerStatus={
+              CLOUD_SYNC_ENABLED ? p.content.registerStatus : undefined
+            }
+            registerError={p.content.registerError}
+            onCopy={async (text) => {
+              try {
+                await navigator.clipboard.writeText(text);
+              } catch {
+                /* ignore */
+              }
+            }}
+          />
         )}
       </PopupBubble>
     );

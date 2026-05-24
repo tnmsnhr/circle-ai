@@ -1,19 +1,18 @@
 import type { ExtractedContext, SelectionRect } from "./types.js";
 
 /**
- * Payload shaped for the AI backend: explicit user selection vs background context.
- * The model should answer about `userSelection`, using `surroundingContext` only
- * to disambiguate (e.g. which product, which section).
+ * Debug-oriented payload mirroring what the backend receives.
+ * Full ExtractedContext remains debug-only in the panel.
  */
 export interface AiSelectionPayload {
-  /** System-style hint you can prepend to the chat system prompt. */
   instruction: string;
+  selectionEvidence?: ExtractedContext["selectionEvidence"];
+  selectionShape?: string;
   userSelection: {
-    /** Exact text inside the lasso bounding box. */
+    /** Debug hint only — AI resolves from candidates. */
     text: string;
     elementTypes: string[];
     selectionRect: SelectionRect;
-    /** JPEG base64 without data: URL prefix — only the boxed region. */
     cropImageBase64?: string;
     hasVisual: boolean;
   };
@@ -39,21 +38,24 @@ export interface AiSelectionPayload {
     extractionStrategy: string;
     capturedAt: string;
     viewport: ExtractedContext["meta"]["viewport"];
+    evidenceConfidence?: number;
   };
 }
 
 const AI_INSTRUCTION =
-  "The user highlighted a specific region on the webpage. Answer about userSelection.text (and userSelection.cropImageBase64 if present). surroundingContext is background only—use it to disambiguate, not as the main subject unless the selection is empty or unclear.";
+  "The browser sent mechanical selection evidence (candidates ranked by visual proximity, not semantic importance). Resolve which candidate the user intended using candidates, local context, crop, and page context. Do not treat focus.text as authoritative.";
 
 export function buildAiPayload(extracted: ExtractedContext): AiSelectionPayload {
+  const evidence = extracted.selectionEvidence;
   return {
     instruction: AI_INSTRUCTION,
+    selectionEvidence: evidence,
     userSelection: {
-      text: extracted.focus.text,
+      text: evidence?.extractedText ?? extracted.focus.text,
       elementTypes: extracted.focus.elementTypes,
       selectionRect: extracted.meta.selectionRect,
-      cropImageBase64: extracted.focus.cropImageBase64,
-      hasVisual: Boolean(extracted.focus.cropImageBase64),
+      cropImageBase64: evidence?.cropImageBase64 ?? extracted.focus.cropImageBase64,
+      hasVisual: Boolean(evidence?.hasVisual ?? extracted.focus.cropImageBase64),
     },
     surroundingContext: {
       nearbyText: extracted.context.nearbyText,
@@ -77,11 +79,11 @@ export function buildAiPayload(extracted: ExtractedContext): AiSelectionPayload 
       extractionStrategy: extracted.meta.extractionStrategy,
       capturedAt: extracted.meta.capturedAt,
       viewport: extracted.meta.viewport,
+      evidenceConfidence: evidence?.evidenceConfidence,
     },
   };
 }
 
-/** Console-log the payload we send to AI (page DevTools → Console). */
 export function logAiPayload(
   payload: AiSelectionPayload,
   selectionId?: string
@@ -92,19 +94,28 @@ export function logAiPayload(
 
   const forConsole = {
     instruction: payload.instruction,
+    selectionEvidence: payload.selectionEvidence
+      ? {
+          ...payload.selectionEvidence,
+          cropImageBase64: payload.selectionEvidence.cropImageBase64
+            ? `<JPEG base64, ${payload.selectionEvidence.cropImageBase64.length} chars>`
+            : undefined,
+          candidates: payload.selectionEvidence.candidates?.map((c) => ({
+            type: c.type,
+            text: c.text?.slice(0, 80),
+            visualWeight: c.visualWeight,
+            signals: c.signals,
+          })),
+        }
+      : undefined,
     userSelection: {
       ...payload.userSelection,
       cropImageBase64: payload.userSelection.cropImageBase64
         ? `<JPEG base64, ${payload.userSelection.cropImageBase64.length} chars>`
         : undefined,
     },
-    surroundingContext: payload.surroundingContext,
-    media: payload.media,
-    page: payload.page,
     meta: payload.meta,
   };
 
   console.log(label, forConsole);
-  console.log(`${label} · USER SELECTED`, payload.userSelection.text);
-  console.log(`${label} · SURROUNDING CONTEXT`, payload.surroundingContext);
 }

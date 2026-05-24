@@ -6,24 +6,24 @@ import {
 } from "./constants.js";
 import { buildPageContext } from "./pageContext/buildPageContext.js";
 import { buildCanonicalUrl } from "./pageContext/canonicalUrl.js";
+import {
+  buildContextLens,
+  classifySelectionShape,
+  hasTableLikeElement,
+  type ContextLens,
+  type SelectionShape,
+} from "./selectionShape.js";
+import type { SelectionEvidence } from "./selectionEvidence/types.js";
+import { textForShapeClassification } from "./selectionEvidence/buildSelectionEvidence.js";
+import { logSelectionEvidence } from "./selectionEvidence/logSelectionEvidence.js";
 
-export interface SelectedMediaMeta {
-  type: "image" | "svg" | "canvas" | "video" | "pdf";
-  alt?: string;
-  title?: string;
-  caption?: string;
-  isPartialSelection?: boolean;
-}
+export type { SelectionShape, ContextLens, SelectionEvidence };
 
 export interface SelectionPayloadBody {
   localPinId: string;
-  userSelection: {
-    text: string;
-    elementTypes: string[];
-  };
-  localContextBlock?: string;
-  selectedMedia?: SelectedMediaMeta[];
-  cropImageBase64?: string;
+  selectionShape: SelectionShape;
+  selectionEvidence: SelectionEvidence;
+  contextLens?: ContextLens;
   meta: {
     extractionStrategy: string;
     selectionTier: SelectionTier;
@@ -32,6 +32,10 @@ export interface SelectionPayloadBody {
     cropWidth?: number;
     cropHeight?: number;
     hasImage: boolean;
+    selectionShape: SelectionShape;
+    elementTypes: string[];
+    evidenceConfidence?: number;
+    focusExtractionMethod?: string;
   };
 }
 
@@ -65,100 +69,99 @@ function estimateTokens(text: string): number {
 function resolveTier(extracted: ExtractedContext): SelectionTier {
   const area =
     extracted.meta.selectionRect.width * extracted.meta.selectionRect.height;
-  const focusLen = extracted.focus.text.length;
-  if (area < 28_000 || focusLen < 80) return "tiny";
-  if (area > 120_000 || focusLen > 800) return "large";
+  const evidence = extracted.selectionEvidence;
+  const textLen =
+    evidence?.extractedText?.length ??
+    evidence?.candidates?.[0]?.text?.length ??
+    extracted.focus.text.length;
+  if (area < 28_000 || textLen < 80) return "tiny";
+  if (area > 120_000 || textLen > 800) return "large";
   return "medium";
 }
 
-function isTinyVisual(extracted: ExtractedContext, tier: SelectionTier): boolean {
-  if (tier !== "tiny") return false;
-  const types = extracted.focus.elementTypes;
-  return (
-    types.includes("image") ||
-    types.includes("canvas") ||
-    types.includes("video") ||
-    types.includes("svg") ||
-    extracted.media.images.some((img) => img.isPartialSelection)
+function isMultiLineEvidence(evidence: SelectionEvidence): boolean {
+  const lineFrags = evidence.candidates.filter(
+    (c) =>
+      c.type === "text-fragment" &&
+      (c.signals.includes("line-fragment") ||
+        c.signals.includes("multi-line-fragment"))
   );
-}
-
-function buildLocalContextBlock(
-  extracted: ExtractedContext,
-  tier: SelectionTier
-): string {
-  const effectiveTier = isTinyVisual(extracted, tier) ? "medium" : tier;
-  const caps: Record<SelectionTier, number> = {
-    tiny: 900,
-    medium: 1800,
-    large: 3500,
-  };
-  const max = caps[effectiveTier];
-  const parts: string[] = [];
-  if (extracted.context.headings.length) {
-    parts.push(extracted.context.headings.map((h) => `[Heading] ${h}`).join("\n"));
-  }
-  if (extracted.context.captions.length) {
-    parts.push(extracted.context.captions.join("\n"));
-  }
-  if (extracted.context.nearbyText) {
-    parts.push(extracted.context.nearbyText);
-  }
-  const block = parts.join("\n\n").trim();
-  return block.length <= max ? block : `${block.slice(0, max)}…`;
-}
-
-function buildSelectedMedia(extracted: ExtractedContext): SelectedMediaMeta[] {
-  const out: SelectedMediaMeta[] = [];
-  for (const img of extracted.media.images.slice(0, 3)) {
-    out.push({
-      type: "image",
-      alt: img.alt || undefined,
-      title: img.title || undefined,
-      caption: img.figcaption,
-      isPartialSelection: img.isPartialSelection,
-    });
-  }
-  if (extracted.focus.elementTypes.includes("video")) {
-    out.push({ type: "video" });
-  }
-  if (extracted.focus.elementTypes.includes("canvas")) {
-    out.push({ type: "canvas" });
-  }
-  if (extracted.focus.elementTypes.includes("svg")) {
-    out.push({ type: "svg" });
-  }
-  return out;
+  if (lineFrags.length >= 2) return true;
+  const tops = new Set(
+    evidence.candidates
+      .filter((c) => c.type === "text-token" && c.rect)
+      .map((c) => Math.round((c.rect!.top + c.rect!.height / 2) / 8))
+  );
+  return tops.size >= 2;
 }
 
 function buildSelectionBody(
   extracted: ExtractedContext,
   localPinId: string
 ): SelectionPayloadBody {
-  const tier = resolveTier(extracted);
-  const localContextBlock = buildLocalContextBlock(extracted, tier);
-  const text = extracted.focus.text;
-  const crop = extracted.focus.cropImageBase64;
+  const evidence = extracted.selectionEvidence;
+  if (!evidence) {
+    throw new Error("buildExtractedContext must attach selectionEvidence before optimizeForAi");
+  }
 
-  return {
+  const tier = resolveTier(extracted);
+  const elementTypes = extracted.focus.elementTypes;
+  const shapeText = textForShapeClassification(evidence);
+  const hasCrop = Boolean(evidence.cropImageBase64);
+  const multiLine = isMultiLineEvidence(evidence);
+
+  let selectionShape = classifySelectionShape({
+    text: shapeText,
+    elementTypes,
+    hasVisual: evidence.hasVisual || hasCrop,
+    hasTableContext: hasTableLikeElement(elementTypes),
+    isMultiLine: multiLine,
+  });
+
+  if (
+    evidence.evidenceConfidence < 0.45 &&
+    hasCrop &&
+    selectionShape === "short_inline_selection"
+  ) {
+    selectionShape = shapeText.trim() ? "mixed_selection" : "visual_selection";
+  }
+
+  const contextLens = buildContextLens(extracted);
+  const tokenEstimate = estimateTokens(
+    shapeText +
+      (evidence.localContextBlock ?? "") +
+      evidence.candidates.map((c) => c.text ?? "").join(" ")
+  );
+
+  const body: SelectionPayloadBody = {
     localPinId,
-    userSelection: {
-      text,
-      elementTypes: extracted.focus.elementTypes,
-    },
-    localContextBlock: localContextBlock || undefined,
-    selectedMedia: buildSelectedMedia(extracted),
-    cropImageBase64: crop,
+    selectionShape,
+    selectionEvidence: evidence,
+    contextLens,
     meta: {
       extractionStrategy: extracted.meta.extractionStrategy,
       selectionTier: tier,
-      estimatedTextTokens: estimateTokens(text + localContextBlock),
-      estimatedImageBytes: crop
-        ? Math.round((crop.length * 3) / 4)
+      estimatedTextTokens: tokenEstimate,
+      estimatedImageBytes: hasCrop
+        ? Math.round((evidence.cropImageBase64!.length * 3) / 4)
         : undefined,
-      hasImage: Boolean(crop),
+      hasImage: hasCrop,
+      selectionShape,
+      elementTypes,
+      evidenceConfidence: evidence.evidenceConfidence,
+      focusExtractionMethod: extracted.focus.extractionMethod,
     },
   };
+
+  const payloadBytes = JSON.stringify(body).length;
+  logSelectionEvidence(evidence, {
+    selectionShape,
+    localContextLen: evidence.localContextBlock?.length ?? 0,
+    payloadJsonBytes: payloadBytes,
+    selectionId: localPinId,
+  });
+
+  return body;
 }
 
 export function optimizeForAi(

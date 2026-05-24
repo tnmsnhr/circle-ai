@@ -4,6 +4,7 @@ import { expandRect } from "../geometry/rect.js";
 import { extractTextInRect } from "../dom/text.js";
 import { prepareText } from "../text/clean.js";
 import { getElementsIntersectingRect } from "../dom/elements.js";
+import { filterPageElements } from "../dom/pageHitTest.js";
 import { isVisible } from "../dom/visibility.js";
 
 function metaDescription(): string | undefined {
@@ -104,7 +105,7 @@ function tableHeadersNear(elements: Element[]): string[] {
 function ancestorTextFromRect(rect: SelectionRect): string {
   const cx = rect.left + rect.width / 2;
   const cy = rect.top + rect.height / 2;
-  const stack = document.elementsFromPoint(cx, cy);
+  const stack = filterPageElements(document.elementsFromPoint(cx, cy));
   const parts: string[] = [];
 
   for (const el of stack) {

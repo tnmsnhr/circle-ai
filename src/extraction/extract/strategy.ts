@@ -11,6 +11,9 @@ export interface StrategyInput {
   hasSvg: boolean;
   hasPdf: boolean;
   pdfTextLength: number;
+  focusConfidence?: number;
+  focusUncertain?: boolean;
+  focusExtractionMethod?: string;
 }
 
 const VISUAL_TYPES = new Set([
@@ -26,6 +29,15 @@ const VISUAL_TYPES = new Set([
  * Decide whether a screenshot crop is worth the token cost.
  */
 export function needsVisualCapture(input: StrategyInput): boolean {
+  if (input.focusUncertain || input.focusExtractionMethod === "visual-fallback") {
+    return true;
+  }
+  if (
+    typeof input.focusConfidence === "number" &&
+    input.focusConfidence < 0.45
+  ) {
+    return true;
+  }
   if (input.hasCanvas || input.hasVideo) return true;
   if (input.hasSvg) return true;
   if (input.hasPdf && input.pdfTextLength < SCREENSHOT.minVisualTextChars) {

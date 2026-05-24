@@ -2,8 +2,16 @@
 export function pickAnchor(clientX, clientY) {
   const x = Math.max(0, Math.min(window.innerWidth - 1, clientX));
   const y = Math.max(0, Math.min(window.innerHeight - 1, clientY));
-  let el = document.elementFromPoint(x, y);
-  while (el?.id === "draw-on-web-root-host") {
+  const stack = document.elementsFromPoint(x, y);
+  let el = stack.find(
+    (node) =>
+      node?.id !== "draw-on-web-root-host" &&
+      node?.id !== "syncle-toolbar-mount" &&
+      !node?.classList?.contains("popup-bubble") &&
+      !node?.classList?.contains("draw-toolbar")
+  );
+  if (!el) el = document.elementFromPoint(x, y);
+  while (el?.id === "draw-on-web-root-host" || el?.id === "syncle-toolbar-mount") {
     el = el.parentElement;
   }
   if (!el) return document.body || document.documentElement;

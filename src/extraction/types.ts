@@ -1,4 +1,15 @@
-/** Axis-aligned selection in viewport (CSS) coordinates. */
+export type FocusExtractionMethod =
+  | "token-polygon"
+  | "token-bbox"
+  | "element-fallback"
+  | "media-crop"
+  | "visual-fallback";
+
+export interface Point2D {
+  x: number;
+  y: number;
+}
+
 export interface SelectionRect {
   left: number;
   top: number;
@@ -73,6 +84,9 @@ export interface ExtractedContext {
     text: string;
     cropImageBase64?: string;
     elementTypes: string[];
+    confidence?: number;
+    extractionMethod?: FocusExtractionMethod;
+    uncertain?: boolean;
   };
   context: {
     nearbyText: string;
@@ -92,12 +106,16 @@ export interface ExtractedContext {
   };
   meta: {
     selectionRect: SelectionRect;
+    /** Lasso polygon in viewport client coordinates (when drawn freehand). */
+    selectionPolygon?: Point2D[];
     viewport: ViewportMeta;
     extractionStrategy: ExtractionStrategy;
     capturedAt: string;
   };
   /** Labeled payload for AI — userSelection vs surroundingContext. */
   aiPayload?: import("./buildAiPayload.js").AiSelectionPayload;
+  /** Candidate evidence for AI resolution (mechanical, not semantic). */
+  selectionEvidence?: import("./selectionEvidence/types.js").SelectionEvidence;
   /** Pruned payload for syncle-services (plan: OptimizedAiPayload). */
   optimizedPayload?: import("./optimizePayload.js").OptimizedAiPayload;
   /** Backend canonical IDs after register (when signed in). */

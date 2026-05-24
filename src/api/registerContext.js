@@ -1,8 +1,7 @@
 /**
  * Register optimized extraction with syncle-services (page once, selection per pin).
  */
-import { getApiBaseUrl } from "../config/api.js";
-import { getAuthHeaders, isSignedIn } from "../auth/session.js";
+import { apiFetch } from "./apiFetch.js";
 import { getPageIdentity } from "../extraction/pageContext/canonicalUrl.ts";
 import {
   getPageSession,
@@ -12,17 +11,65 @@ import {
 } from "../extraction/pageContext/cache.ts";
 import { optimizeForAi } from "../extraction/optimizePayload.ts";
 
+const REGISTER_TIMEOUT_MS = 25000;
+const MAX_CROP_CHARS_IN_REGISTER = 0; // omit base64 on register — keeps payload small; text context is enough for chat v1
+
+function slimSelectionForRegister(selection) {
+  const slim = { ...selection };
+  const evidence = slim.selectionEvidence;
+  const crop =
+    (evidence && evidence.cropImageBase64) || slim.cropImageBase64;
+  if (crop && crop.length > MAX_CROP_CHARS_IN_REGISTER) {
+    const { cropImageBase64: _legacy, ...rest } = slim;
+    if (rest.selectionEvidence?.cropImageBase64) {
+      const { cropImageBase64, ...ev } = rest.selectionEvidence;
+      rest.selectionEvidence = { ...ev, hasVisual: true };
+    }
+    return {
+      ...rest,
+      meta: {
+        ...(rest.meta && typeof rest.meta === "object" ? rest.meta : {}),
+        hasImage: true,
+      },
+    };
+  }
+  return slim;
+}
+
+async function fetchWithTimeout(path, options) {
+  return apiFetch(path, { ...options, timeoutMs: REGISTER_TIMEOUT_MS });
+}
+
 /**
  * @param {import('../extraction/types').ExtractedContext} extracted
  * @param {string} localPinId
  * @returns {Promise<{ pageContextId: string, selectionContextId: string, optimizedPayload: object } | null>}
  */
-export async function registerExtractedContext(extracted, localPinId) {
-  if (!(await isSignedIn())) {
-    return null;
+/**
+ * Register or return existing IDs. Surfaces errors to the UI (no silent fail).
+ * @returns {Promise<{ ok: true, pageContextId: string, selectionContextId: string, optimizedPayload: object } | { ok: false, reason: string, message?: string }>}
+ */
+export async function ensureContextRegistered(extracted, localPinId) {
+  try {
+    const registered = await registerExtractedContext(extracted, localPinId);
+    if (!registered) {
+      return {
+        ok: false,
+        reason: "error",
+        message: "Registration failed",
+      };
+    }
+    return { ok: true, ...registered };
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Could not register selection";
+    return { ok: false, reason: "error", message };
   }
+}
 
+export async function registerExtractedContext(extracted, localPinId) {
   const { pageFingerprint, canonicalUrl } = await getPageIdentity();
+  console.info("[syncle] register start", canonicalUrl);
   let pageSession = await getPageSession(pageFingerprint);
 
   const optimized = optimizeForAi(extracted, {
@@ -31,32 +78,31 @@ export async function registerExtractedContext(extracted, localPinId) {
     pageContextId: pageSession?.pageContextId,
   });
 
-  const base = await getApiBaseUrl();
-  const headers = {
-    "Content-Type": "application/json",
-    ...(await getAuthHeaders()),
-  };
-
   if (optimized.kind === "selection_with_page_context") {
-    const res = await fetch(`${base}/context/page/register`, {
+    const res = await fetchWithTimeout("/context/page/register", {
       method: "POST",
-      headers,
       body: JSON.stringify({
         schemaVersion: optimized.schemaVersion,
         extractorVersion: optimized.extractorVersion,
         pageFingerprint,
         canonicalUrl,
         pageContext: optimized.pageContext,
-        selection: optimized.selection,
+        selection: slimSelectionForRegister(optimized.selection),
       }),
     });
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Page register failed (${res.status})`);
+      const detail = err.details
+        ? ` ${JSON.stringify(err.details)}`
+        : "";
+      throw new Error(
+        (err.error || `Page register failed (${res.status})`) + detail
+      );
     }
 
     const ids = await res.json();
+    console.info("[syncle] register ok", ids.pageContextId, ids.selectionContextId);
     pageSession = await savePageSession(pageFingerprint, {
       pageContextId: ids.pageContextId,
       pageFingerprint,
@@ -82,21 +128,23 @@ export async function registerExtractedContext(extracted, localPinId) {
 
   await touchPageSession(pageFingerprint, pageSession);
 
-  const res = await fetch(`${base}/context/selection/register`, {
+  const res = await fetchWithTimeout("/context/selection/register", {
     method: "POST",
-    headers,
     body: JSON.stringify({
       schemaVersion: optimized.schemaVersion,
       extractorVersion: optimized.extractorVersion,
       pageContextId: pageSession.pageContextId,
       pageFingerprint,
-      selection: optimized.selection,
+      selection: slimSelectionForRegister(optimized.selection),
     }),
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Selection register failed (${res.status})`);
+    const detail = err.details ? ` ${JSON.stringify(err.details)}` : "";
+    throw new Error(
+      (err.error || `Selection register failed (${res.status})`) + detail
+    );
   }
 
   const { selectionContextId } = await res.json();

@@ -1,27 +1,9 @@
 import type { SelectionRect } from "../types.js";
 import { cleanText } from "../text/clean.js";
-
-type CaretPoint = { node: Node; offset: number };
-
-/** Caret at viewport point (Chrome content script). */
-function caretAt(x: number, y: number): CaretPoint | null {
-  const doc = document;
-  if (typeof doc.caretRangeFromPoint === "function") {
-    const range = doc.caretRangeFromPoint(x, y);
-    if (range) {
-      return { node: range.startContainer, offset: range.startOffset };
-    }
-  }
-  const pos = doc.caretPositionFromPoint?.(x, y);
-  if (pos) {
-    return { node: pos.offsetNode, offset: pos.offset };
-  }
-  return null;
-}
+import { caretAt, rangeFromCarets } from "../focus/caret.js";
 
 /**
- * Extract only the text the user boxed, using caret positions at the
- * selection edges. Avoids pulling an entire paragraph from one text node.
+ * Extract text using caret positions at selection bbox edges (bbox-only fallback).
  */
 export function extractStrictSelectedText(rect: SelectionRect): string {
   const pad = 2;
@@ -31,21 +13,10 @@ export function extractStrictSelectedText(rect: SelectionRect): string {
 
   const start = caretAt(xStart, y);
   const end = caretAt(xEnd, y);
-
   if (!start || !end) return "";
 
-  const range = document.createRange();
-  try {
-    range.setStart(start.node, start.offset);
-    range.setEnd(end.node, end.offset);
-  } catch {
-    try {
-      range.setStart(end.node, end.offset);
-      range.setEnd(start.node, start.offset);
-    } catch {
-      return "";
-    }
-  }
+  const range = rangeFromCarets(start, end);
+  if (!range) return "";
 
   const text = range.toString().trim();
   return text ? cleanText(text) : "";

@@ -29,18 +29,67 @@ function isExpired(record: { expiresAt: string }): boolean {
   return Date.parse(record.expiresAt) <= Date.now();
 }
 
-function sessionGet<T>(key: string): Promise<T | undefined> {
-  return new Promise((resolve) => {
-    chrome.storage.session.get(key, (items) => {
-      resolve(items[key] as T | undefined);
-    });
+const STORAGE_OP_MS = 4000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms
+    );
+    promise
+      .then((v) => {
+        clearTimeout(timer);
+        resolve(v);
+      })
+      .catch((e) => {
+        clearTimeout(timer);
+        reject(e);
+      });
   });
 }
 
-function sessionSet(key: string, value: unknown): Promise<void> {
-  return new Promise((resolve) => {
-    chrome.storage.session.set({ [key]: value }, () => resolve());
+function sessionGet<T>(key: string): Promise<T | undefined> {
+  const op = new Promise<T | undefined>((resolve, reject) => {
+    if (!chrome.storage?.session) {
+      resolve(undefined);
+      return;
+    }
+    chrome.storage.session.get(key, (items) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve(items[key] as T | undefined);
+    });
   });
+  return withTimeout(op, STORAGE_OP_MS, "chrome.storage.session.get").catch(
+    (err) => {
+      console.warn("[syncle] session get failed:", err);
+      return undefined;
+    }
+  );
+}
+
+function sessionSet(key: string, value: unknown): Promise<void> {
+  const op = new Promise<void>((resolve, reject) => {
+    if (!chrome.storage?.session) {
+      resolve();
+      return;
+    }
+    chrome.storage.session.set({ [key]: value }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve();
+    });
+  });
+  return withTimeout(op, STORAGE_OP_MS, "chrome.storage.session.set").catch(
+    (err) => {
+      console.warn("[syncle] session set failed:", err);
+    }
+  );
 }
 
 function sessionRemove(key: string): Promise<void> {
