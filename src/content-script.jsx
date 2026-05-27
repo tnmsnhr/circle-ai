@@ -26,6 +26,15 @@ const extensionCss = `${overlayCss}\n${popupBubbleCss}`;
     "z-index:2147483646",
   ].join(";");
 
+  const overlayMount = document.createElement("div");
+  overlayMount.id = "syncle-overlay-mount";
+  overlayMount.style.cssText = [
+    "position:fixed",
+    "inset:0",
+    "pointer-events:none",
+    "z-index:2147483647",
+  ].join(";");
+
   const toolbarMount = document.createElement("div");
   toolbarMount.id = "syncle-toolbar-mount";
   toolbarMount.style.cssText = [
@@ -40,6 +49,7 @@ const extensionCss = `${overlayCss}\n${popupBubbleCss}`;
   pageStyle.textContent = extensionCss;
 
   document.documentElement.appendChild(host);
+  document.documentElement.appendChild(overlayMount);
   document.documentElement.appendChild(toolbarMount);
   document.documentElement.appendChild(pageStyle);
 
@@ -54,5 +64,7 @@ const extensionCss = `${overlayCss}\n${popupBubbleCss}`;
   shadow.appendChild(mount);
 
   const root = createRoot(mount);
-  root.render(<OverlayApp toolbarMount={toolbarMount} />);
+  root.render(
+    <OverlayApp toolbarMount={overlayMount} toolbarControlsMount={toolbarMount} />
+  );
 })();

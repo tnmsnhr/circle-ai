@@ -72,7 +72,15 @@ const PopupBubble = ({
               <button
                 type="button"
                 className="popup-bubble__dot popup-bubble__dot--dismiss"
-                onClick={onDismiss}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDismiss?.();
+                }}
                 aria-label="Cancel selection"
                 title="Cancel — remove selection and chat"
               >

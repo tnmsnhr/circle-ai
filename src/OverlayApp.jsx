@@ -33,8 +33,12 @@ import {
 
 const isHotkey = (e) => e.metaKey || e.ctrlKey;
 const AUTO_CHAT_MESSAGE = "__syncle_explain_selection__";
+const AI_DRAW_CURSOR =
+  'url("data:image/svg+xml,%3Csvg xmlns%3D%27http%3A//www.w3.org/2000/svg%27 width%3D%2724%27 height%3D%2724%27 viewBox%3D%270 0 24 24%27%3E%3Ccircle cx%3D%279%27 cy%3D%279%27 r%3D%273%27 fill%3D%27none%27 stroke%3D%27%232563eb%27 stroke-width%3D%271.6%27/%3E%3Cpath d%3D%27M9 2v3M9 13v3M2 9h3M13 9h3%27 stroke%3D%27%232563eb%27 stroke-width%3D%271.6%27 stroke-linecap%3D%27round%27/%3E%3Cpath d%3D%27M17 4l.8 1.8L20 6.6l-2.2.8L17 9.2l-.8-1.8L14 6.6l2.2-.8z%27 fill%3D%27%23f59e0b%27/%3E%3Cpath d%3D%27M18 12l1 2.2 2.4.9-2.4.9-1 2.2-1-2.2-2.4-.9 2.4-.9z%27 fill%3D%27%23fde68a%27/%3E%3C/svg%3E") 9 9, crosshair';
+const INTERACTIVE_OVERLAY_SELECTOR =
+  ".popup-bubble, .syncle-floating-toolbar, #syncle-overlay-mount, #syncle-toolbar-mount";
 
-export default function OverlayApp({ toolbarMount }) {
+export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
   const [hotkeyReady, setHotkeyReady] = useState(false);
   const [drawingEnabled, setDrawingEnabled] = useState(true);
   const [viewport, setViewport] = useState(getViewportSize());
@@ -383,6 +387,37 @@ export default function OverlayApp({ toolbarMount }) {
     };
   }, []);
 
+  useEffect(() => {
+    const shouldShowDrawCursor =
+      drawingEnabled && isAiProductMode(productMode) && hotkeyReady;
+    if (!shouldShowDrawCursor) return;
+
+    const rootStyle = document.documentElement.style;
+    const bodyStyle = document.body?.style;
+    const prevRootCursor = rootStyle.getPropertyValue("cursor");
+    const prevRootPriority = rootStyle.getPropertyPriority("cursor");
+    const prevBodyCursor = bodyStyle?.getPropertyValue("cursor") ?? "";
+    const prevBodyPriority = bodyStyle?.getPropertyPriority("cursor") ?? "";
+
+    rootStyle.setProperty("cursor", AI_DRAW_CURSOR, "important");
+    bodyStyle?.setProperty("cursor", AI_DRAW_CURSOR, "important");
+
+    return () => {
+      if (prevRootCursor) {
+        rootStyle.setProperty("cursor", prevRootCursor, prevRootPriority);
+      } else {
+        rootStyle.removeProperty("cursor");
+      }
+
+      if (!bodyStyle) return;
+      if (prevBodyCursor) {
+        bodyStyle.setProperty("cursor", prevBodyCursor, prevBodyPriority);
+      } else {
+        bodyStyle.removeProperty("cursor");
+      }
+    };
+  }, [drawingEnabled, hotkeyReady, productMode]);
+
   const updatePopupContent = (popupId, patch) => {
     setPopups((prev) =>
       prev.map((p) =>
@@ -627,6 +662,12 @@ export default function OverlayApp({ toolbarMount }) {
       if (!(e instanceof PointerEvent)) return;
       if (!drawingEnabledRef.current) return;
       if (!isAiProductMode(productModeRef.current)) return;
+      if (
+        e.target instanceof Element &&
+        e.target.closest(INTERACTIVE_OVERLAY_SELECTOR)
+      ) {
+        return;
+      }
       if (!isHotkey(e)) return;
       if (e.button !== 0) return;
       isDrawingRef.current = true;
@@ -717,7 +758,6 @@ export default function OverlayApp({ toolbarMount }) {
   };
 
   const removeSelection = (id) => {
-    autoSummaryStartedRef.current.delete(id);
     polysRef.current = polysRef.current.filter((p) => p.id !== id);
     anchorsRef.current.delete(id);
     setPopups((prev) => prev.filter((p) => p.id !== id));
@@ -920,7 +960,11 @@ export default function OverlayApp({ toolbarMount }) {
         style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
       />
 
-      {toolbarMount ? createPortal(toolbar, toolbarMount) : toolbar}
+      {toolbarControlsMount
+        ? createPortal(toolbar, toolbarControlsMount)
+        : toolbarMount
+          ? createPortal(toolbar, toolbarMount)
+          : toolbar}
 
       {popupNodes}
     </div>
