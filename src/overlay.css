@@ -29,140 +29,122 @@
 .syncle-floating-toolbar {
   position: fixed;
   z-index: 2147483647;
-  width: 168px;
-  padding: 6px 8px 8px;
-  border-radius: 14px;
-  background: rgba(24, 24, 28, 0.72);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #f4f4f5;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  width: 220px;
+  height: 220px;
+  border-radius: 999px;
+  background: transparent;
   user-select: none;
   pointer-events: auto;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  font-size: 11px;
-  line-height: 1.3;
 }
 
-.syncle-floating-toolbar__drag {
+.syncle-arc-button {
+  position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  padding: 2px 0 4px;
-  margin: 0;
   border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.45);
-  cursor: grab;
-  border-radius: 6px;
-}
-
-.syncle-floating-toolbar__drag:hover {
-  color: rgba(255, 255, 255, 0.75);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.syncle-floating-toolbar__drag:active {
-  cursor: grabbing;
-}
-
-.syncle-floating-toolbar__modes {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-}
-
-.syncle-mode-btn {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-  padding: 8px 4px 6px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  color: #fff;
   cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.35),
+    0 8px 24px rgba(99, 102, 241, 0.28);
+  transform: translate3d(var(--x), var(--y), 0) scale(1) rotate(0deg);
+  opacity: 1;
   transition:
-    background 0.15s,
-    border-color 0.15s,
-    color 0.15s;
+    transform 320ms cubic-bezier(0.2, 1.8, 0.35, 1),
+    opacity 120ms ease-out;
+  will-change: transform, opacity;
 }
 
-.syncle-mode-btn:hover {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.22);
+.syncle-arc-button > svg {
+  width: 18px;
+  height: 18px;
 }
 
-.syncle-mode-btn--active {
-  background: rgba(99, 102, 241, 0.45);
-  border-color: rgba(129, 140, 248, 0.65);
-  color: #fff;
-  box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.35);
+.syncle-arc-button-closed {
+  transform: translate3d(0px, 0px, 0) scale(0.35) rotate(-18deg);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 280ms cubic-bezier(0.2, 1.65, 0.35, 1),
+    opacity 100ms ease-in;
 }
 
-.syncle-mode-btn__label {
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  opacity: 0.9;
+.syncle-arc-button-active {
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.35),
+    0 8px 24px rgba(255, 255, 255, 0.24),
+    0 0 0 2px rgba(255, 255, 255, 0.5);
 }
 
-.syncle-floating-toolbar__footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  margin-top: 8px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+.syncle-arc-button-violet {
+  background: rgba(139, 92, 246, 0.82);
 }
 
-.syncle-floating-toolbar__hint {
-  flex: 1;
-  min-width: 0;
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.72);
+.syncle-arc-button-indigo {
+  background: rgba(99, 102, 241, 0.82);
 }
 
-.syncle-floating-toolbar__hint b {
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.95);
+.syncle-arc-button-pink {
+  background: rgba(236, 72, 153, 0.82);
 }
 
-.syncle-floating-toolbar__hint--muted {
-  color: rgba(255, 255, 255, 0.5);
-  font-style: italic;
+.syncle-arc-button-slate {
+  background: rgba(71, 85, 105, 0.84);
 }
 
-.syncle-floating-toolbar__actions {
-  display: flex;
-  gap: 2px;
-  flex-shrink: 0;
+.syncle-arc-button-amber {
+  background: rgba(245, 158, 11, 0.86);
 }
 
-.syncle-icon-btn {
+.syncle-center-button {
+  position: absolute;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
   border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
+  border-radius: 50%;
+  background: #f97316;
+  color: white;
+  user-select: none;
+  touch-action: none;
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.35),
+    0 8px 24px rgba(249, 115, 22, 0.3);
+  transition: transform 150ms ease-out;
+  will-change: transform;
 }
 
-.syncle-icon-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+.syncle-center-button:hover {
+  transform: scale(1.1);
+}
+
+.syncle-center-button:active {
+  transform: scale(0.92);
+}
+
+.syncle-center-button-icon {
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(0deg) scale(1);
+  transition: transform 260ms cubic-bezier(0.2, 1.8, 0.35, 1);
+  will-change: transform;
+}
+
+.syncle-center-button-icon > svg {
+  width: 24px;
+  height: 24px;
+}
+
+.syncle-center-button-icon-closed {
+  transform: rotate(45deg) scale(0.96);
 }
 
 .color-swatch { /* ... unchanged ... */ }
