@@ -11,6 +11,7 @@ export function shouldIncludeCrop(
 ): boolean {
   if (selectionShape === "visual_selection") return true;
   if (selectionShape === "mixed_selection") return true;
+  if (selectionShape === "structured_region_selection") return true;
 
   const hasMediaCandidate = evidence.candidates.some((c) => c.type === "media");
   const partialMedia = evidence.candidates.some((c) =>
@@ -47,6 +48,13 @@ export function shouldIncludeCrop(
   if (
     selectionShape === "long_text_selection" ||
     selectionShape === "multi_line_text_selection"
+  ) {
+    return false;
+  }
+
+  if (
+    evidence.isLargeCodeBlock &&
+    evidence.evidenceConfidence >= 0.75
   ) {
     return false;
   }

@@ -7,6 +7,8 @@ export type SelectionShape =
   | "code_like_selection"
   | "visual_selection"
   | "structured_data_selection"
+  | "structured_region_selection"
+  | "section_heading_selection"
   | "mixed_selection";
 
 export interface ContextLens {
@@ -24,6 +26,12 @@ export interface ClassifySelectionShapeInput {
   hasTableContext?: boolean;
   /** Two or more visually distinct selected text lines. */
   isMultiLine?: boolean;
+  /** Large UI/card/header/profile region with grouped controls. */
+  isStructuredRegion?: boolean;
+  /** Multi-line code/pre block selection. */
+  isLargeCodeBlock?: boolean;
+  /** User selected a section heading/title. */
+  isSectionHeading?: boolean;
 }
 
 const LONG_TEXT_CHAR_MIN = 250;
@@ -56,6 +64,8 @@ const VALID_SHAPES = new Set<SelectionShape>([
   "code_like_selection",
   "visual_selection",
   "structured_data_selection",
+  "structured_region_selection",
+  "section_heading_selection",
   "mixed_selection",
 ]);
 
@@ -67,6 +77,8 @@ const LEGACY_TO_SHAPE: Record<string, SelectionShape> = {
   code_like_selection: "code_like_selection",
   visual_selection: "visual_selection",
   structured_data_selection: "structured_data_selection",
+  structured_region_selection: "structured_region_selection",
+  section_heading_selection: "section_heading_selection",
   mixed_selection: "mixed_selection",
   focus_explanation: "short_inline_selection",
   passage_summary: "long_text_selection",
@@ -114,6 +126,10 @@ export function defaultUserMessageForShape(
       return `Explain what this selected code does and why it matters here: ${quoted}`;
     case "structured_data_selection":
       return `Explain the selected structured data value: ${quoted}`;
+    case "structured_region_selection":
+      return "Explain the selected UI/content region using the grouped candidates and crop. Do not focus on a single center token unless it is clearly the intended subject.";
+    case "section_heading_selection":
+      return "Explain the selected section heading and the content under it. Treat the full heading phrase as the primary subject, not individual words within it.";
     case "short_inline_selection":
     default:
       return `Explain ${quoted} directly. Start with the selected item. Use context only as a domain lens.`;
@@ -202,6 +218,20 @@ export function classifySelectionShape(
   const { hasVisual, elementTypes } = input;
   const table =
     input.hasTableContext ?? hasTableLikeElement(elementTypes);
+
+  if (input.isLargeCodeBlock) {
+    return "code_like_selection";
+  }
+
+  if (input.isSectionHeading) {
+    return "section_heading_selection";
+  }
+
+  if (input.isStructuredRegion) {
+    return hasVisual && hasMeaningfulText(text)
+      ? "mixed_selection"
+      : "structured_region_selection";
+  }
 
   if (hasVisual && hasMeaningfulText(text)) {
     return "mixed_selection";

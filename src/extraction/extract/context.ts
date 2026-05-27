@@ -144,13 +144,18 @@ export interface PageContextBundle {
 
 export function extractSurroundingContext(
   rect: SelectionRect,
-  focusElements: Element[]
+  focusElements: Element[],
+  options?: { expandPx?: number }
 ): PageContextBundle {
   const viewport = {
     width: window.innerWidth,
     height: window.innerHeight,
   };
-  const expanded = expandRect(rect, CONTEXT_EXPAND_PX, viewport);
+  const expanded = expandRect(
+    rect,
+    options?.expandPx ?? CONTEXT_EXPAND_PX,
+    viewport
+  );
   const nearbyRaw = extractTextInRect(expanded);
   const expandedEls = getElementsIntersectingRect(expanded);
 

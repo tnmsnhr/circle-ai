@@ -13,7 +13,10 @@ import {
   type ContextLens,
   type SelectionShape,
 } from "./selectionShape.js";
-import type { SelectionEvidence } from "./selectionEvidence/types.js";
+import type {
+  SelectionEvidence,
+  SelectionSubType,
+} from "./selectionEvidence/types.js";
 import { textForShapeClassification } from "./selectionEvidence/buildSelectionEvidence.js";
 import { logSelectionEvidence } from "./selectionEvidence/logSelectionEvidence.js";
 
@@ -22,6 +25,7 @@ export type { SelectionShape, ContextLens, SelectionEvidence };
 export interface SelectionPayloadBody {
   localPinId: string;
   selectionShape: SelectionShape;
+  selectionSubType?: SelectionSubType;
   selectionEvidence: SelectionEvidence;
   contextLens?: ContextLens;
   meta: {
@@ -33,6 +37,7 @@ export interface SelectionPayloadBody {
     cropHeight?: number;
     hasImage: boolean;
     selectionShape: SelectionShape;
+    selectionSubType?: SelectionSubType;
     elementTypes: string[];
     evidenceConfidence?: number;
     focusExtractionMethod?: string;
@@ -116,6 +121,9 @@ function buildSelectionBody(
     hasVisual: evidence.hasVisual || hasCrop,
     hasTableContext: hasTableLikeElement(elementTypes),
     isMultiLine: multiLine,
+    isStructuredRegion: evidence.isStructuredRegion,
+    isLargeCodeBlock: evidence.isLargeCodeBlock,
+    isSectionHeading: evidence.isSectionHeading,
   });
 
   if (
@@ -136,6 +144,7 @@ function buildSelectionBody(
   const body: SelectionPayloadBody = {
     localPinId,
     selectionShape,
+    selectionSubType: evidence.selectionSubType,
     selectionEvidence: evidence,
     contextLens,
     meta: {
@@ -147,6 +156,7 @@ function buildSelectionBody(
         : undefined,
       hasImage: hasCrop,
       selectionShape,
+      selectionSubType: evidence.selectionSubType,
       elementTypes,
       evidenceConfidence: evidence.evidenceConfidence,
       focusExtractionMethod: extracted.focus.extractionMethod,

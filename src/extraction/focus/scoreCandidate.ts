@@ -67,9 +67,11 @@ export function scoreTextTokenCandidate(
     height: rect.height,
   };
 
+  const largeSelection = ctx.selectionArea >= 55_000;
+
   const hit = hitsPolygon(r, ctx.polygon, ctx.bbox);
   if (hit.centerInside) {
-    score += 60;
+    score += largeSelection ? 28 : 60;
     reasons.push("center-in-polygon");
   } else if (hit.intersects) {
     score += 32;
@@ -97,7 +99,7 @@ export function scoreTextTokenCandidate(
   const lineCenterY = ctx.lassoCenter.y;
   const tokenCenterY = r.top + r.height / 2;
   if (Math.abs(tokenCenterY - lineCenterY) <= 12) {
-    score += 14;
+    score += largeSelection ? 4 : 14;
     reasons.push("same-line-as-center");
   }
 
@@ -151,12 +153,14 @@ export function scoreTextRangeCandidate(
     height: rect.height,
   };
 
+  const largeSelection = ctx.selectionArea >= 55_000;
+
   const hit = hitsPolygon(r, ctx.polygon, ctx.bbox);
   if (hit.centerInside) {
-    score += 45;
+    score += largeSelection ? 22 : 45;
     reasons.push("center-in-polygon");
   } else if (hit.intersects) {
-    score += 28;
+    score += largeSelection ? 18 : 28;
     reasons.push("intersects-polygon");
   } else if (hit.bboxOnly) {
     score += 10;
@@ -170,14 +174,19 @@ export function scoreTextRangeCandidate(
   if (polyCover > 0.45) reasons.push("high-polygon-cover");
 
   const dist = distanceToSelectionCenter(r, ctx.lassoCenter);
-  score -= dist * 0.08;
-  if (dist < 36) reasons.push("near-lasso-center");
+  score -= dist * (largeSelection ? 0.12 : 0.08);
+  if (dist < 36 && !largeSelection) reasons.push("near-lasso-center");
 
   const lineCenterY = ctx.lassoCenter.y;
   const midY = r.top + r.height / 2;
   if (Math.abs(midY - lineCenterY) <= 10) {
-    score += 18;
+    score += largeSelection ? 4 : 18;
     reasons.push("same-line-as-center");
+  }
+
+  if (source === "center-line" && largeSelection) {
+    score -= 25;
+    reasons.push("center-line");
   }
 
   if (isCompactToken(text)) {

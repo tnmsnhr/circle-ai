@@ -187,7 +187,9 @@ async function buildExtractedContextInner(
     options.selectionPolygon,
     elements
   );
-  const surrounding = extractSurroundingContext(selectionRect, elements);
+  const surrounding = extractSurroundingContext(selectionRect, elements, {
+    expandPx: 64,
+  });
   const images = extractImages(elements, selectionRect);
   const svgs = extractSvgs(elements);
   const pdfHint = extractPdfHint(
@@ -265,12 +267,17 @@ async function buildExtractedContextInner(
     hasVisual: evidence.hasVisual,
     hasTableContext: hasTableLikeElement(elementTypes),
     isMultiLine: isMultiLineEvidence(evidence),
+    isStructuredRegion: evidence.isStructuredRegion,
+    isLargeCodeBlock: evidence.isLargeCodeBlock,
+    isSectionHeading: evidence.isSectionHeading,
   });
 
   const localContextBlock = buildLocalContextBlock(
     draftExtracted,
     tier,
-    selectionShape
+    selectionShape,
+    evidence,
+    elements
   );
   evidence = { ...evidence, localContextBlock };
 
@@ -315,6 +322,9 @@ async function buildExtractedContextInner(
       hasVisual: true,
       hasTableContext: hasTableLikeElement(elementTypes),
       isMultiLine: isMultiLineEvidence(evidence),
+      isStructuredRegion: evidence.isStructuredRegion,
+      isLargeCodeBlock: evidence.isLargeCodeBlock,
+      isSectionHeading: evidence.isSectionHeading,
     });
   }
 

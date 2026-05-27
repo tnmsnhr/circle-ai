@@ -25,40 +25,145 @@
   pointer-events: none;
 }
 
-/* Toolbar remains clickable regardless */
-.draw-toolbar {
+/* Draggable floating product toolbar (light DOM) */
+.syncle-floating-toolbar {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
-  padding: 8px 10px;
-  background: rgba(20, 20, 20, 0.92);
-  color: #fff;
-  border-radius: 10px;
-  font-size: 12px;
-  line-height: 1.2;
+  z-index: 2147483647;
+  width: 168px;
+  padding: 6px 8px 8px;
+  border-radius: 14px;
+  background: rgba(24, 24, 28, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #f4f4f5;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
   user-select: none;
   pointer-events: auto;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 11px;
+  line-height: 1.3;
 }
 
-.draw-toolbar button {
-  padding: 4px 8px;
+.syncle-floating-toolbar__drag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 2px 0 4px;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  cursor: grab;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.12);
+}
+
+.syncle-floating-toolbar__drag:hover {
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.syncle-floating-toolbar__drag:active {
+  cursor: grabbing;
+}
+
+.syncle-floating-toolbar__modes {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.syncle-mode-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 4px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.syncle-mode-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.syncle-mode-btn--active {
+  background: rgba(99, 102, 241, 0.45);
+  border-color: rgba(129, 140, 248, 0.65);
   color: #fff;
-  font: inherit;
+  box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.35);
+}
+
+.syncle-mode-btn__label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+.syncle-floating-toolbar__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.syncle-floating-toolbar__hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.syncle-floating-toolbar__hint b {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.syncle-floating-toolbar__hint--muted {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+
+.syncle-floating-toolbar__actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.syncle-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
 }
 
-.draw-toolbar button:hover {
-  background: rgba(255, 255, 255, 0.22);
+.syncle-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 
 .color-swatch { /* ... unchanged ... */ }
 .width-chip { /* ... unchanged ... */ }
-.hint { margin-right: 8px; }

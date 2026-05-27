@@ -4,6 +4,12 @@ export type CandidateType =
   | "text-token"
   | "text-range"
   | "text-fragment"
+  | "region"
+  | "code-block"
+  | "heading"
+  | "button"
+  | "link"
+  | "tab"
   | "media"
   | "structured"
   | "element";

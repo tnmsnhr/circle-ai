@@ -22,11 +22,17 @@ import {
 } from "./utils";
 import { runSelectionExtraction } from "./extraction/runExtraction.js";
 import { ensureContextRegistered } from "./api/registerContext.js";
+import { sendChatMessage } from "./api/chatClient.js";
 import { isSignedIn } from "./auth/session.js";
 import { CLOUD_SYNC_ENABLED } from "./config/features.js";
-import ExtractionPanel from "./components/ExtractionPanel.jsx";
+import FloatingToolbar from "./components/FloatingToolbar.jsx";
+import {
+  PRODUCT_MODES,
+  isAiProductMode,
+} from "./components/productModes.js";
 
 const isHotkey = (e) => e.metaKey || e.ctrlKey;
+const AUTO_CHAT_MESSAGE = "__syncle_explain_selection__";
 
 export default function OverlayApp({ toolbarMount }) {
   const [hotkeyReady, setHotkeyReady] = useState(false);
@@ -40,6 +46,10 @@ export default function OverlayApp({ toolbarMount }) {
   const lassoThemeRef = useRef(getLassoTheme(DEFAULT_LASSO_THEME_ID));
   const viewportRef = useRef(viewport);
   viewportRef.current = viewport;
+
+  const [productMode, setProductMode] = useState(PRODUCT_MODES.AI);
+  const productModeRef = useRef(PRODUCT_MODES.AI);
+  productModeRef.current = productMode;
 
   const [signedIn, setSignedIn] = useState(false);
   const [popups, setPopups] = useState([]);
@@ -373,6 +383,46 @@ export default function OverlayApp({ toolbarMount }) {
     };
   }, []);
 
+  const updatePopupContent = (popupId, patch) => {
+    setPopups((prev) =>
+      prev.map((p) =>
+        p.id === popupId ? { ...p, content: { ...p.content, ...patch } } : p
+      )
+    );
+  };
+
+  const requestAiReply = async (popupId, contextIds) => {
+    if (!contextIds?.pageContextId || !contextIds?.selectionContextId) return;
+
+    updatePopupContent(popupId, {
+      chatStatus: "loading",
+      chatError: "",
+      chatProvider: "",
+      chatModel: "",
+    });
+
+    try {
+      const result = await sendChatMessage({
+        pageContextId: contextIds.pageContextId,
+        selectionContextId: contextIds.selectionContextId,
+        message: AUTO_CHAT_MESSAGE,
+      });
+
+      updatePopupContent(popupId, {
+        chatStatus: "ready",
+        chatReply: result.reply || "",
+        chatProvider: result.provider || "",
+        chatModel: result.model || "",
+        chatError: "",
+      });
+    } catch (err) {
+      updatePopupContent(popupId, {
+        chatStatus: "error",
+        chatError: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
   useEffect(() => {
     const finishCommit = () => {
       const points = pointsRef.current;
@@ -419,6 +469,9 @@ export default function OverlayApp({ toolbarMount }) {
               chatDraft: "",
               chatReply: "",
               chatStatus: "idle",
+              chatError: "",
+              chatProvider: "",
+              chatModel: "",
               registerStatus: CLOUD_SYNC_ENABLED ? "extracting" : "local",
             },
           },
@@ -512,6 +565,9 @@ export default function OverlayApp({ toolbarMount }) {
                         : reg;
                 const contextIds =
                   extracted.contextIds ?? p.content.contextIds;
+                const canChat = Boolean(
+                  contextIds?.pageContextId && contextIds?.selectionContextId
+                );
                 return {
                   ...p,
                   content: {
@@ -522,10 +578,16 @@ export default function OverlayApp({ toolbarMount }) {
                     contextIds,
                     extractStatus: "ready",
                     registerStatus,
+                    chatStatus: canChat ? "loading" : p.content.chatStatus,
                   },
                 };
               })
             );
+
+            const ids = extracted.contextIds;
+            if (ids?.pageContextId && ids?.selectionContextId) {
+              requestAiReply(id, ids);
+            }
           })
           .catch((err) => {
             clearTimeout(registerWatchdog);
@@ -564,6 +626,7 @@ export default function OverlayApp({ toolbarMount }) {
     const start = (e) => {
       if (!(e instanceof PointerEvent)) return;
       if (!drawingEnabledRef.current) return;
+      if (!isAiProductMode(productModeRef.current)) return;
       if (!isHotkey(e)) return;
       if (e.button !== 0) return;
       isDrawingRef.current = true;
@@ -700,14 +763,6 @@ export default function OverlayApp({ toolbarMount }) {
     }, BUBBLE_MORPH_MS);
   };
 
-  const updatePopupContent = (popupId, patch) => {
-    setPopups((prev) =>
-      prev.map((p) =>
-        p.id === popupId ? { ...p, content: { ...p.content, ...patch } } : p
-      )
-    );
-  };
-
   const popupNodes = popups.map((p, stackIndex) => {
     const poly = polysRef.current.find((poly) => poly.id === p.id);
     const anchor = getAnchor(p.id);
@@ -755,7 +810,7 @@ export default function OverlayApp({ toolbarMount }) {
         </div>
         {p.content.extractStatus === "loading" && (
           <div style={{ marginTop: 6 }}>
-            <b>Extracting…</b> <i>Reading selection locally</i>
+            <b>Working…</b> <i>Extracting selection and preparing AI reply</i>
           </div>
         )}
         {p.content.extractStatus === "error" && (
@@ -769,20 +824,53 @@ export default function OverlayApp({ toolbarMount }) {
           </div>
         )}
         {p.content.extractStatus === "ready" && p.content.extracted && (
-          <ExtractionPanel
-            extracted={p.content.extracted}
-            registerStatus={
-              CLOUD_SYNC_ENABLED ? p.content.registerStatus : undefined
-            }
-            registerError={p.content.registerError}
-            onCopy={async (text) => {
-              try {
-                await navigator.clipboard.writeText(text);
-              } catch {
-                /* ignore */
-              }
-            }}
-          />
+          <>
+            <div
+              style={{
+                marginTop: 10,
+                borderTop: "1px solid rgba(0,0,0,0.12)",
+                paddingTop: 8,
+              }}
+            >
+              <b style={{ fontSize: 13 }}>AI response</b>
+              {p.content.chatStatus === "loading" && (
+                <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.75 }}>
+                  <i>Thinking…</i>
+                </p>
+              )}
+              {p.content.chatStatus === "ready" && (
+                <div style={{ marginTop: 8 }}>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      lineHeight: 1.45,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {p.content.chatReply}
+                  </div>
+                  {(p.content.chatProvider || p.content.chatModel) && (
+                    <div style={{ marginTop: 6, fontSize: 10, opacity: 0.6 }}>
+                      {p.content.chatProvider || "ai"}
+                      {p.content.chatModel ? ` · ${p.content.chatModel}` : ""}
+                    </div>
+                  )}
+                </div>
+              )}
+              {p.content.chatStatus === "error" && (
+                <p style={{ margin: "8px 0 0", fontSize: 11, color: "#b91c1c" }}>
+                  {p.content.chatError || "Could not fetch AI response."}
+                </p>
+              )}
+            </div>
+
+            {p.content.chatStatus === "loading" && (
+              <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.75 }}>
+                <i>Analyzing…</i>
+              </p>
+            )}
+          </>
         )}
       </PopupBubble>
     );
@@ -790,23 +878,24 @@ export default function OverlayApp({ toolbarMount }) {
     return toolbarMount ? createPortal(node, toolbarMount) : node;
   });
 
+  const handleProductModeChange = (mode) => {
+    setProductMode(mode);
+    if (!isAiProductMode(mode)) {
+      cancelLive();
+      setHotkeyReady(false);
+    }
+  };
+
   const toolbar = (
-    <div className="draw-toolbar">
-      <span className="hint">
-        Hold <b>⌘</b> (or <b>Ctrl</b>) and drag{" "}
-        {!drawingEnabled
-          ? "(disabled)"
-          : hotkeyReady
-            ? "(ready)"
-            : ""}
-      </span>
-      <button type="button" onClick={undo}>
-        Undo
-      </button>
-      <button type="button" onClick={clearAll}>
-        Clear
-      </button>
-    </div>
+    <FloatingToolbar
+      productMode={productMode}
+      onProductModeChange={handleProductModeChange}
+      drawingEnabled={drawingEnabled && isAiProductMode(productMode)}
+      hotkeyReady={hotkeyReady && isAiProductMode(productMode)}
+      onUndo={undo}
+      onClear={clearAll}
+      viewport={viewport}
+    />
   );
 
   return (

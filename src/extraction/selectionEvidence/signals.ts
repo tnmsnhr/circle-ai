@@ -22,6 +22,22 @@ const REASON_TO_SIGNAL: Record<string, string> = {
   "center-line": "text-fragment",
   "element-fallback": "bbox-only-fallback",
   "no-hit": "far-from-center",
+  "large-selection": "large-selection",
+  "region-candidate": "region-candidate",
+  "grouped-control": "grouped-control",
+  "inside-selection": "inside-selection",
+  "selected-container": "selected-container",
+  "contains-heading": "contains-heading",
+  "contains-actions": "contains-actions",
+  "contains-metadata": "contains-metadata",
+  "contains-tabs": "contains-tabs",
+  "code-block": "code-block",
+  monospace: "monospace",
+  "multi-line-code": "multi-line-code",
+  "structural-element": "structural-element",
+  "phrase-expanded": "phrase-expanded",
+  "section-title": "section-title",
+  "phrase-length-ok": "phrase-length-ok",
 };
 
 export function mapSignals(reasonCodes: string[]): string[] {
