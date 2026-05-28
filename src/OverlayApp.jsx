@@ -605,8 +605,6 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
                   content: {
                     ...p.content,
                     text: preview,
-                    extracted,
-                    aiPayload: extracted.aiPayload,
                     contextIds,
                     extractStatus: "ready",
                     registerStatus,
@@ -860,7 +858,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
             </i>
           </div>
         )}
-        {p.content.extractStatus === "ready" && p.content.extracted && (
+        {p.content.extractStatus === "ready" && (
           <>
             <div
               style={{

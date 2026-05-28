@@ -2,7 +2,6 @@
  * Thin JS bridge so OverlayApp (JSX) can call the TS pipeline without type friction.
  */
 import { buildExtractedContextFromPoints } from "./buildExtractedContext.ts";
-import { logAiPayload } from "./buildAiPayload.ts";
 import { ensureContextRegistered } from "../api/registerContext.js";
 import { CLOUD_SYNC_ENABLED } from "../config/features.js";
 
@@ -16,8 +15,12 @@ export function runSelectionExtraction(clientPoints, selectionId, onRegisterUpda
   return buildExtractedContextFromPoints(clientPoints)
     .then(async (extracted) => {
       try {
-        if (extracted.aiPayload) {
-          logAiPayload(extracted.aiPayload, selectionId);
+        if (selectionId) {
+          console.info(
+            "[syncle] selection captured",
+            selectionId.slice(0, 8),
+            extracted.focus.cropImageBase64 ? "with crop" : "no crop"
+          );
         }
 
         if (selectionId && CLOUD_SYNC_ENABLED) {

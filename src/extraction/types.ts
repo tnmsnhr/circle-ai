@@ -50,7 +50,6 @@ export interface ExtractedContext {
     extractionStrategy: ExtractionStrategy;
     capturedAt: string;
   };
-  aiPayload?: import("./buildAiPayload.js").AiSelectionPayload;
   selectionEvidence?: import("./selectionEvidence/types.js").SelectionEvidence;
   optimizedPayload?: import("./optimizePayload.js").OptimizedAiPayload;
   contextIds?: {

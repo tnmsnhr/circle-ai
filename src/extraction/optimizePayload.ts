@@ -6,14 +6,17 @@ import {
 } from "./constants.js";
 import { buildPageContext } from "./pageContext/buildPageContext.js";
 import { buildCanonicalUrl } from "./pageContext/canonicalUrl.js";
-import {
-  buildContextLens,
-  type ContextLens,
-  type SelectionShape,
-} from "./selectionShape.js";
 import type { SelectionEvidence } from "./selectionEvidence/types.js";
 
-export type { SelectionShape, ContextLens, SelectionEvidence };
+export type SelectionShape = "visual_selection";
+
+export interface ContextLens {
+  pageTitle?: string;
+  pageType?: string;
+  domain?: string;
+  nearestHeading?: string;
+  topicHint?: string;
+}
 
 export interface SelectionPayloadBody {
   localPinId: string;
@@ -55,6 +58,26 @@ export interface OptimizedAiPayloadPin {
 export type OptimizedAiPayload =
   | OptimizedAiPayloadFirstPin
   | OptimizedAiPayloadPin;
+
+function truncate(s: string, max: number): string {
+  const t = s.trim();
+  return t.length <= max ? t : `${t.slice(0, max)}…`;
+}
+
+function buildContextLens(extracted: ExtractedContext): ContextLens | undefined {
+  const { context, source } = extracted;
+  const lens: ContextLens = {};
+
+  if (context.pageTitle) lens.pageTitle = truncate(context.pageTitle, 200);
+  if (source.domain) lens.domain = source.domain;
+  if (source.type) lens.pageType = source.type;
+  if (context.h1?.trim()) lens.nearestHeading = truncate(context.h1, 120);
+  if (context.metaDescription?.trim()) {
+    lens.topicHint = truncate(context.metaDescription, 160);
+  }
+
+  return Object.keys(lens).length > 0 ? lens : undefined;
+}
 
 function resolveTier(rect: ExtractedContext["meta"]["selectionRect"]): SelectionTier {
   const area = rect.width * rect.height;

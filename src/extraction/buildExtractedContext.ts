@@ -2,7 +2,6 @@ import type { ExtractedContext, Point2D } from "./types.js";
 import { SCREENSHOT } from "./constants.js";
 import { rectFromPoints } from "./geometry/rect.js";
 import { requestCroppedScreenshot } from "./screenshot/captureClient.js";
-import { buildAiPayload } from "./buildAiPayload.js";
 import type { SelectionEvidence } from "./selectionEvidence/types.js";
 
 export interface BuildExtractedContextOptions {
@@ -84,9 +83,5 @@ export async function buildExtractedContextFromPoints(
     selectionEvidence: evidence,
   };
 
-  extracted.aiPayload = buildAiPayload(extracted);
   return extracted;
 }
-
-/** @deprecated Use buildExtractedContextFromPoints */
-export const buildExtractedContext = buildExtractedContextFromPoints;
