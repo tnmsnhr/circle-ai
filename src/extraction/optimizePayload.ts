@@ -8,24 +8,16 @@ import { buildPageContext } from "./pageContext/buildPageContext.js";
 import { buildCanonicalUrl } from "./pageContext/canonicalUrl.js";
 import {
   buildContextLens,
-  classifySelectionShape,
-  hasTableLikeElement,
   type ContextLens,
   type SelectionShape,
 } from "./selectionShape.js";
-import type {
-  SelectionEvidence,
-  SelectionSubType,
-} from "./selectionEvidence/types.js";
-import { textForShapeClassification } from "./selectionEvidence/buildSelectionEvidence.js";
-import { logSelectionEvidence } from "./selectionEvidence/logSelectionEvidence.js";
+import type { SelectionEvidence } from "./selectionEvidence/types.js";
 
 export type { SelectionShape, ContextLens, SelectionEvidence };
 
 export interface SelectionPayloadBody {
   localPinId: string;
   selectionShape: SelectionShape;
-  selectionSubType?: SelectionSubType;
   selectionEvidence: SelectionEvidence;
   contextLens?: ContextLens;
   meta: {
@@ -33,11 +25,8 @@ export interface SelectionPayloadBody {
     selectionTier: SelectionTier;
     estimatedTextTokens: number;
     estimatedImageBytes?: number;
-    cropWidth?: number;
-    cropHeight?: number;
     hasImage: boolean;
     selectionShape: SelectionShape;
-    selectionSubType?: SelectionSubType;
     elementTypes: string[];
     evidenceConfidence?: number;
     focusExtractionMethod?: string;
@@ -67,37 +56,11 @@ export type OptimizedAiPayload =
   | OptimizedAiPayloadFirstPin
   | OptimizedAiPayloadPin;
 
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
-}
-
-function resolveTier(extracted: ExtractedContext): SelectionTier {
-  const area =
-    extracted.meta.selectionRect.width * extracted.meta.selectionRect.height;
-  const evidence = extracted.selectionEvidence;
-  const textLen =
-    evidence?.extractedText?.length ??
-    evidence?.candidates?.[0]?.text?.length ??
-    extracted.focus.text.length;
-  if (area < 28_000 || textLen < 80) return "tiny";
-  if (area > 120_000 || textLen > 800) return "large";
+function resolveTier(rect: ExtractedContext["meta"]["selectionRect"]): SelectionTier {
+  const area = rect.width * rect.height;
+  if (area < 28_000) return "tiny";
+  if (area > 120_000) return "large";
   return "medium";
-}
-
-function isMultiLineEvidence(evidence: SelectionEvidence): boolean {
-  const lineFrags = evidence.candidates.filter(
-    (c) =>
-      c.type === "text-fragment" &&
-      (c.signals.includes("line-fragment") ||
-        c.signals.includes("multi-line-fragment"))
-  );
-  if (lineFrags.length >= 2) return true;
-  const tops = new Set(
-    evidence.candidates
-      .filter((c) => c.type === "text-token" && c.rect)
-      .map((c) => Math.round((c.rect!.top + c.rect!.height / 2) / 8))
-  );
-  return tops.size >= 2;
 }
 
 function buildSelectionBody(
@@ -106,72 +69,31 @@ function buildSelectionBody(
 ): SelectionPayloadBody {
   const evidence = extracted.selectionEvidence;
   if (!evidence) {
-    throw new Error("buildExtractedContext must attach selectionEvidence before optimizeForAi");
+    throw new Error("selectionEvidence required before optimizeForAi");
   }
 
-  const tier = resolveTier(extracted);
-  const elementTypes = extracted.focus.elementTypes;
-  const shapeText = textForShapeClassification(evidence);
   const hasCrop = Boolean(evidence.cropImageBase64);
-  const multiLine = isMultiLineEvidence(evidence);
+  const selectionShape: SelectionShape = "visual_selection";
 
-  let selectionShape = classifySelectionShape({
-    text: shapeText,
-    elementTypes,
-    hasVisual: evidence.hasVisual || hasCrop,
-    hasTableContext: hasTableLikeElement(elementTypes),
-    isMultiLine: multiLine,
-    isStructuredRegion: evidence.isStructuredRegion,
-    isLargeCodeBlock: evidence.isLargeCodeBlock,
-    isSectionHeading: evidence.isSectionHeading,
-  });
-
-  if (
-    evidence.evidenceConfidence < 0.45 &&
-    hasCrop &&
-    selectionShape === "short_inline_selection"
-  ) {
-    selectionShape = shapeText.trim() ? "mixed_selection" : "visual_selection";
-  }
-
-  const contextLens = buildContextLens(extracted);
-  const tokenEstimate = estimateTokens(
-    shapeText +
-      (evidence.localContextBlock ?? "") +
-      evidence.candidates.map((c) => c.text ?? "").join(" ")
-  );
-
-  const body: SelectionPayloadBody = {
+  return {
     localPinId,
     selectionShape,
-    selectionSubType: evidence.selectionSubType,
     selectionEvidence: evidence,
-    contextLens,
+    contextLens: buildContextLens(extracted),
     meta: {
       extractionStrategy: extracted.meta.extractionStrategy,
-      selectionTier: tier,
-      estimatedTextTokens: tokenEstimate,
+      selectionTier: resolveTier(extracted.meta.selectionRect),
+      estimatedTextTokens: 0,
       estimatedImageBytes: hasCrop
         ? Math.round((evidence.cropImageBase64!.length * 3) / 4)
         : undefined,
       hasImage: hasCrop,
       selectionShape,
-      selectionSubType: evidence.selectionSubType,
-      elementTypes,
+      elementTypes: [],
       evidenceConfidence: evidence.evidenceConfidence,
       focusExtractionMethod: extracted.focus.extractionMethod,
     },
   };
-
-  const payloadBytes = JSON.stringify(body).length;
-  logSelectionEvidence(evidence, {
-    selectionShape,
-    localContextLen: evidence.localContextBlock?.length ?? 0,
-    payloadJsonBytes: payloadBytes,
-    selectionId: localPinId,
-  });
-
-  return body;
 }
 
 export function optimizeForAi(

@@ -8,9 +8,12 @@ export type {
   CaptureCropResponse,
 } from "./types.js";
 
-export { LIMITS, SCREENSHOT, MSG, CONTEXT_EXPAND_PX } from "./constants.js";
-export { buildExtractedContext, buildExtractedContextFromPoints } from "./buildExtractedContext.js";
+export { SCREENSHOT, MSG } from "./constants.js";
+export {
+  buildExtractedContext,
+  buildExtractedContextFromPoints,
+} from "./buildExtractedContext.js";
 export { buildAiPayload, logAiPayload } from "./buildAiPayload.js";
 export type { AiSelectionPayload } from "./buildAiPayload.js";
-export { rectFromPoints, normalizeRect, expandRect } from "./geometry/rect.js";
+export { rectFromPoints, normalizeRect } from "./geometry/rect.js";
 export { requestCroppedScreenshot } from "./screenshot/captureClient.js";

@@ -10,7 +10,6 @@ export interface PageContextPayload {
   };
 }
 
-/** Page-level block only — no nav/footer; title, h1, meta from extraction. */
 export function buildPageContext(
   extracted: ExtractedContext
 ): PageContextPayload {

@@ -579,12 +579,9 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
             }
           })
           .then((extracted) => {
-            const preview =
-              extracted.selectionEvidence?.candidates?.[0]?.text?.trim().slice(0, 280) ||
-              extracted.focus.text?.trim().slice(0, 280) ||
-              (extracted.focus.cropImageBase64
-                ? `[Visual: ${extracted.meta.extractionStrategy}]`
-                : "");
+            const preview = extracted.focus.cropImageBase64
+              ? "[Visual selection]"
+              : "No screenshot captured";
             setPopups((prev) =>
               prev.map((p) => {
                 if (p.id !== id) return p;
@@ -634,7 +631,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
                       ...p,
                       content: {
                         ...p.content,
-                        text: "Could not extract selection.",
+                        text: "Could not capture selection.",
                         extractStatus: "error",
                         registerStatus: "error",
                         registerError:
