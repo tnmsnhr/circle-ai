@@ -17,6 +17,7 @@ import {
   loadSettings,
   isDrawingEnabled,
   isAutoCollapseEnabled,
+  isAiEnabled,
   getLassoTheme,
   DEFAULT_LASSO_THEME_ID,
 } from "./utils";
@@ -41,10 +42,12 @@ const INTERACTIVE_OVERLAY_SELECTOR =
 export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
   const [hotkeyReady, setHotkeyReady] = useState(false);
   const [drawingEnabled, setDrawingEnabled] = useState(true);
+  const [aiEnabled, setAiEnabled] = useState(true);
   const [viewport, setViewport] = useState(getViewportSize());
   const [, setFrame] = useState(0);
 
   const drawingEnabledRef = useRef(true);
+  const aiEnabledRef = useRef(true);
   const autoCollapseRef = useRef(true);
   const isDrawingRef = useRef(false);
   const lassoThemeRef = useRef(getLassoTheme(DEFAULT_LASSO_THEME_ID));
@@ -327,6 +330,9 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       const on = isDrawingEnabled(s);
       drawingEnabledRef.current = on;
       setDrawingEnabled(on);
+      const aiOn = isAiEnabled(s);
+      aiEnabledRef.current = aiOn;
+      setAiEnabled(aiOn);
       autoCollapseRef.current = isAutoCollapseEnabled(s);
       lassoThemeRef.current = getLassoTheme(s.lassoTheme);
       redrawInk();
@@ -357,6 +363,12 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
 
       if (changes.autoCollapse !== undefined) {
         autoCollapseRef.current = changes.autoCollapse.newValue !== false;
+      }
+
+      if (changes.aiEnabled !== undefined) {
+        const aiOn = changes.aiEnabled.newValue !== false;
+        aiEnabledRef.current = aiOn;
+        setAiEnabled(aiOn);
       }
     };
     chrome.storage.onChanged.addListener(onStorageChange);
@@ -507,7 +519,9 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
               chatError: "",
               chatProvider: "",
               chatModel: "",
-              registerStatus: CLOUD_SYNC_ENABLED ? "extracting" : "local",
+              registerStatus: aiEnabledRef.current && CLOUD_SYNC_ENABLED
+                ? "extracting"
+                : "local",
             },
           },
         ]);
@@ -516,30 +530,36 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
           addExpandedPopup(id);
         }
 
-        const registerWatchdog = setTimeout(() => {
-          setPopups((prev) =>
-            prev.map((p) =>
-              p.id === id &&
-              (p.content.registerStatus === "pending" ||
-                p.content.registerStatus === "extracting")
-                ? {
-                    ...p,
-                    content: {
-                      ...p.content,
-                      registerStatus: "error",
-                      registerError:
-                        "Register timed out. Reload the extension and ensure syncle-services is on :3001.",
-                    },
-                  }
-                : p
-            )
-          );
-        }, 40000);
+        const registerWatchdog = aiEnabledRef.current
+          ? setTimeout(() => {
+              setPopups((prev) =>
+                prev.map((p) =>
+                  p.id === id &&
+                  (p.content.registerStatus === "pending" ||
+                    p.content.registerStatus === "extracting")
+                    ? {
+                        ...p,
+                        content: {
+                          ...p.content,
+                          registerStatus: "error",
+                          registerError:
+                            "Register timed out. Reload the extension and ensure syncle-services is on :3001.",
+                        },
+                      }
+                    : p
+                )
+              );
+            }, 40000)
+          : null;
 
         const runExtract = () =>
-          runSelectionExtraction(clientPts, id, (registerResult) => {
-            clearTimeout(registerWatchdog);
-            if (registerResult.ok) {
+          runSelectionExtraction(
+            clientPts,
+            id,
+            (registerResult) => {
+              if (registerWatchdog) clearTimeout(registerWatchdog);
+              if (registerResult?.skipped) return;
+              if (registerResult.ok) {
               setPopups((prev) =>
                 prev.map((p) =>
                   p.id === id
@@ -577,50 +597,66 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
                 )
               );
             }
-          })
+          },
+            { aiEnabled: aiEnabledRef.current }
+          )
           .then((extracted) => {
-            const preview = extracted.focus.cropImageBase64
-              ? "[Visual selection]"
-              : "No screenshot captured";
+            const localOnly = !aiEnabledRef.current;
+            const preview = localOnly
+              ? extracted.localDom?.textSnippet ||
+                extracted.focus.text?.trim() ||
+                "(no text in selection)"
+              : extracted.focus.cropImageBase64
+                ? "[Visual selection]"
+                : "No screenshot captured";
             setPopups((prev) =>
               prev.map((p) => {
                 if (p.id !== id) return p;
                 const reg = p.content.registerStatus;
-                const registerStatus = !CLOUD_SYNC_ENABLED
+                const registerStatus = localOnly
                   ? "local"
-                  : extracted.contextIds
-                    ? "ready"
-                    : reg === "ready" || reg === "error" || reg === "no_session"
-                      ? reg
-                      : reg === "extracting"
-                        ? "pending"
-                        : reg;
+                  : !CLOUD_SYNC_ENABLED
+                    ? "local"
+                    : extracted.contextIds
+                      ? "ready"
+                      : reg === "ready" || reg === "error" || reg === "no_session"
+                        ? reg
+                        : reg === "extracting"
+                          ? "pending"
+                          : reg;
                 const contextIds =
                   extracted.contextIds ?? p.content.contextIds;
-                const canChat = Boolean(
-                  contextIds?.pageContextId && contextIds?.selectionContextId
-                );
+                const canChat =
+                  !localOnly &&
+                  Boolean(
+                    contextIds?.pageContextId && contextIds?.selectionContextId
+                  );
                 return {
                   ...p,
                   content: {
                     ...p.content,
                     text: preview,
+                    localPreview: localOnly ? preview : "",
                     contextIds,
                     extractStatus: "ready",
                     registerStatus,
-                    chatStatus: canChat ? "loading" : p.content.chatStatus,
+                    chatStatus: canChat ? "loading" : "idle",
                   },
                 };
               })
             );
 
             const ids = extracted.contextIds;
-            if (ids?.pageContextId && ids?.selectionContextId) {
+            if (
+              aiEnabledRef.current &&
+              ids?.pageContextId &&
+              ids?.selectionContextId
+            ) {
               requestAiReply(id, ids);
             }
           })
           .catch((err) => {
-            clearTimeout(registerWatchdog);
+            if (registerWatchdog) clearTimeout(registerWatchdog);
             console.warn("[syncle] extraction failed:", err);
             setPopups((prev) =>
               prev.map((p) =>
@@ -845,7 +881,12 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         </div>
         {p.content.extractStatus === "loading" && (
           <div style={{ marginTop: 6 }}>
-            <b>Working…</b> <i>Extracting selection and preparing AI reply</i>
+            <b>Working…</b>{" "}
+            <i>
+              {aiEnabled
+                ? "Extracting selection and preparing AI reply"
+                : "Extracting selection locally…"}
+            </i>
           </div>
         )}
         {p.content.extractStatus === "error" && (
@@ -860,6 +901,25 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         )}
         {p.content.extractStatus === "ready" && (
           <>
+            {!aiEnabled ? (
+              <div
+                style={{
+                  marginTop: 10,
+                  borderTop: "1px solid rgba(0,0,0,0.12)",
+                  paddingTop: 8,
+                }}
+              >
+                <b style={{ fontSize: 13 }}>Local extraction</b>
+                <p style={{ margin: "8px 0 0", fontSize: 12, lineHeight: 1.45 }}>
+                  {p.content.text || p.content.localPreview || "No text found."}
+                </p>
+                <p style={{ margin: "8px 0 0", fontSize: 11, opacity: 0.65 }}>
+                  Full payload logged to DevTools console (F12). No backend or
+                  OpenAI calls in this mode.
+                </p>
+              </div>
+            ) : (
+              <>
             <div
               style={{
                 marginTop: 10,
@@ -905,6 +965,8 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
                 <i>Analyzing…</i>
               </p>
             )}
+              </>
+            )}
           </>
         )}
       </PopupBubble>
@@ -927,6 +989,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       onProductModeChange={handleProductModeChange}
       drawingEnabled={drawingEnabled && isAiProductMode(productMode)}
       hotkeyReady={hotkeyReady && isAiProductMode(productMode)}
+      aiEnabled={aiEnabled}
       onUndo={undo}
       onClear={clearAll}
       viewport={viewport}

@@ -18,6 +18,7 @@ export default function PopupApp() {
   const [lassoTheme, setLassoTheme] = useState("emerald");
   const [enabled, setEnabled] = useState(true);
   const [autoCollapse, setAutoCollapse] = useState(true);
+  const [aiEnabled, setAiEnabled] = useState(true);
   const [status, setStatus] = useState("");
   const [ready, setReady] = useState(false);
   const [accountEmail, setAccountEmail] = useState(null);
@@ -39,6 +40,7 @@ export default function PopupApp() {
         setLassoTheme(s.lassoTheme);
         setEnabled(s.enabled);
         setAutoCollapse(s.autoCollapse !== false);
+        setAiEnabled(s.aiEnabled !== false);
         setAccountEmail(active?.user?.email ?? null);
         applyThemeToDocument(s.theme);
         setReady(true);
@@ -120,6 +122,17 @@ export default function PopupApp() {
     await persist(
       { autoCollapse: value },
       value ? "Auto-collapse on scroll enabled" : "Auto-collapse on scroll disabled"
+    );
+  };
+
+  const onAiEnabledChange = async (e) => {
+    const value = e.target.checked;
+    setAiEnabled(value);
+    await persist(
+      { aiEnabled: value },
+      value
+        ? "AI mode — selections sent to OpenAI"
+        : "Local mode — extract only, console log"
     );
   };
 
@@ -223,6 +236,27 @@ export default function PopupApp() {
             <option value="dark">Dark</option>
           </select>
         </div>
+      </section>
+
+      <section className="popup-section">
+        <h2>Selection mode</h2>
+        <div className="field">
+          <label htmlFor="aiEnabled">AI responses (OpenAI)</label>
+          <label className="toggle">
+            <input
+              id="aiEnabled"
+              type="checkbox"
+              checked={aiEnabled}
+              onChange={onAiEnabledChange}
+            />
+            <span />
+          </label>
+        </div>
+        <p className="hint">
+          {aiEnabled
+            ? "After each lasso: screenshot → syncle-services → OpenAI summary in the bubble."
+            : "After each lasso: local DOM text extract only. Full payload in DevTools console (F12). No backend calls."}
+        </p>
       </section>
 
       <section className="popup-section">

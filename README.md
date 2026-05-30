@@ -32,6 +32,16 @@ Syncle lets you lasso areas on any webpage and attach chat-style bubbles that st
    - **Color Picker**: Choose from 8 different colors
    - **Clear All**: Remove all drawn areas
 
+## Architecture explorer
+
+Interactive documentation — Chrome Extension 101 (background vs content script, manifest, every file) plus Syncle flow (lasso → capture → register → chat):
+
+```bash
+open docs/extension-flow.html
+```
+
+Or open `syncle-ui/docs/extension-flow.html` in a browser.
+
 ## Development
 
 ### Prerequisites

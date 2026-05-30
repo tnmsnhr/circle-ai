@@ -2,6 +2,7 @@ import type { ExtractedContext, Point2D } from "./types.js";
 import { SCREENSHOT } from "./constants.js";
 import { rectFromPoints } from "./geometry/rect.js";
 import { requestCroppedScreenshot } from "./screenshot/captureClient.js";
+import { extractLocalFromRect } from "./extractLocalFromRect.js";
 import type { SelectionEvidence } from "./selectionEvidence/types.js";
 
 export interface BuildExtractedContextOptions {
@@ -84,4 +85,54 @@ export async function buildExtractedContextFromPoints(
   };
 
   return extracted;
+}
+
+/** Local-only: DOM text in lasso rect + page meta. No screenshot, no backend. */
+export async function buildLocalExtractedContextFromPoints(
+  clientPoints: Array<{ x: number; y: number }>,
+  options: BuildExtractedContextOptions = {}
+): Promise<ExtractedContext & { localDom: ReturnType<typeof extractLocalFromRect> }> {
+  const selectionRect = rectFromPoints(clientPoints);
+  const pageMeta = readPageMeta();
+  const localDom = extractLocalFromRect(selectionRect);
+
+  const evidence: SelectionEvidence = {
+    candidates: [],
+    hasVisual: false,
+    evidenceConfidence: localDom.selectedText.trim() ? 0.85 : 0.2,
+  };
+
+  return {
+    source: {
+      type: "webpage",
+      url: location.href,
+      title: pageMeta.pageTitle,
+      domain: location.hostname || "",
+    },
+    focus: {
+      text: localDom.textSnippet,
+      elementTypes: localDom.elementTags,
+      extractionMethod: "visual-fallback",
+      uncertain: !localDom.selectedText.trim(),
+    },
+    context: {
+      pageTitle: pageMeta.pageTitle,
+      metaDescription: pageMeta.metaDescription || undefined,
+      h1: pageMeta.h1 || undefined,
+    },
+    media: { images: [] },
+    meta: {
+      selectionRect,
+      selectionPolygon: options.selectionPolygon,
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        devicePixelRatio: window.devicePixelRatio || 1,
+      },
+      extractionStrategy: "visual-primary",
+      capturedAt: new Date().toISOString(),
+    },
+    selectionEvidence: evidence,
+    localDom,
+  };
 }

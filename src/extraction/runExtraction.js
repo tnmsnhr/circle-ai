@@ -1,7 +1,11 @@
 /**
  * Thin JS bridge so OverlayApp (JSX) can call the TS pipeline without type friction.
  */
-import { buildExtractedContextFromPoints } from "./buildExtractedContext.ts";
+import {
+  buildExtractedContextFromPoints,
+  buildLocalExtractedContextFromPoints,
+} from "./buildExtractedContext.ts";
+import { logLocalExtraction } from "./logLocalExtraction.js";
 import { ensureContextRegistered } from "../api/registerContext.js";
 import { CLOUD_SYNC_ENABLED } from "../config/features.js";
 
@@ -9,9 +13,30 @@ import { CLOUD_SYNC_ENABLED } from "../config/features.js";
  * @param {Array<{ x: number, y: number }>} clientPoints
  * @param {string} [selectionId]
  * @param {(result: import('../api/registerContext.js').RegisterContextResult) => void} [onRegisterUpdate]
+ * @param {{ aiEnabled?: boolean }} [options]
  * @returns {Promise<import('./types').ExtractedContext>}
  */
-export function runSelectionExtraction(clientPoints, selectionId, onRegisterUpdate) {
+export function runSelectionExtraction(
+  clientPoints,
+  selectionId,
+  onRegisterUpdate,
+  options = {}
+) {
+  const aiEnabled = options.aiEnabled !== false;
+
+  if (!aiEnabled) {
+    return buildLocalExtractedContextFromPoints(clientPoints)
+      .then((extracted) => {
+        logLocalExtraction(extracted, selectionId);
+        onRegisterUpdate?.({ ok: false, reason: "local_only", skipped: true });
+        return extracted;
+      })
+      .catch((err) => {
+        console.error("[syncle] local extraction failed:", err);
+        throw err;
+      });
+  }
+
   return buildExtractedContextFromPoints(clientPoints)
     .then(async (extracted) => {
       try {

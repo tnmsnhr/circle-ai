@@ -5,6 +5,8 @@ export const DEFAULT_SETTINGS = {
   enabled: true,
   lassoTheme: DEFAULT_LASSO_THEME_ID,
   autoCollapse: true,
+  /** When true: register + OpenAI chat. When false: local DOM extract + console only. */
+  aiEnabled: true,
 };
 
 export function loadSettings() {
@@ -31,6 +33,11 @@ export function isDrawingEnabled(settings) {
 /** Only an explicit `false` disables scroll auto-collapse. */
 export function isAutoCollapseEnabled(settings) {
   return settings?.autoCollapse !== false;
+}
+
+/** Only an explicit `false` disables AI (backend + OpenAI). */
+export function isAiEnabled(settings) {
+  return settings?.aiEnabled !== false;
 }
 
 export function saveSettings(partial) {

@@ -16,6 +16,7 @@ import {
   applyThemeToDocument,
   isDrawingEnabled,
   isAutoCollapseEnabled,
+  isAiEnabled,
 } from "./settings";
 import {
   LASSO_THEMES,
@@ -44,6 +45,7 @@ export {
   applyThemeToDocument,
   isDrawingEnabled,
   isAutoCollapseEnabled,
+  isAiEnabled,
   LASSO_THEMES,
   DEFAULT_LASSO_THEME_ID,
   getLassoTheme,
