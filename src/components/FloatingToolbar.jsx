@@ -107,7 +107,6 @@ export default function FloatingToolbar({
   onProductModeChange,
   drawingEnabled,
   hotkeyReady,
-  aiEnabled = true,
   onUndo,
   onClear,
   viewport,
@@ -301,9 +300,7 @@ export default function FloatingToolbar({
         aria-label={isOpen ? "Collapse menu" : "Expand menu"}
         title={
           productMode === "ai"
-            ? aiEnabled
-              ? `AI on — Hold Cmd/Ctrl + drag${!drawingEnabled ? " (off)" : hotkeyReady ? " · ready" : ""}`
-              : `Local only — Hold Cmd/Ctrl + drag${!drawingEnabled ? " (off)" : hotkeyReady ? " · ready" : ""}`
+            ? `Hold Cmd/Ctrl + drag${!drawingEnabled ? " (off)" : hotkeyReady ? " · ready" : ""}`
             : activeMeta?.label ?? "Syncle tools"
         }
         style={{

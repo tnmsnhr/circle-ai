@@ -17,15 +17,9 @@ import {
   loadSettings,
   isDrawingEnabled,
   isAutoCollapseEnabled,
-  isAiEnabled,
   getLassoTheme,
   DEFAULT_LASSO_THEME_ID,
 } from "./utils";
-import { runSelectionExtraction } from "./extraction/runExtraction.js";
-import { ensureContextRegistered } from "./api/registerContext.js";
-import { sendChatMessage } from "./api/chatClient.js";
-import { isSignedIn } from "./auth/session.js";
-import { CLOUD_SYNC_ENABLED } from "./config/features.js";
 import FloatingToolbar from "./components/FloatingToolbar.jsx";
 import {
   PRODUCT_MODES,
@@ -33,7 +27,6 @@ import {
 } from "./components/productModes.js";
 
 const isHotkey = (e) => e.metaKey || e.ctrlKey;
-const AUTO_CHAT_MESSAGE = "__syncle_explain_selection__";
 const AI_DRAW_CURSOR =
   'url("data:image/svg+xml,%3Csvg xmlns%3D%27http%3A//www.w3.org/2000/svg%27 width%3D%2724%27 height%3D%2724%27 viewBox%3D%270 0 24 24%27%3E%3Ccircle cx%3D%279%27 cy%3D%279%27 r%3D%273%27 fill%3D%27none%27 stroke%3D%27%232563eb%27 stroke-width%3D%271.6%27/%3E%3Cpath d%3D%27M9 2v3M9 13v3M2 9h3M13 9h3%27 stroke%3D%27%232563eb%27 stroke-width%3D%271.6%27 stroke-linecap%3D%27round%27/%3E%3Cpath d%3D%27M17 4l.8 1.8L20 6.6l-2.2.8L17 9.2l-.8-1.8L14 6.6l2.2-.8z%27 fill%3D%27%23f59e0b%27/%3E%3Cpath d%3D%27M18 12l1 2.2 2.4.9-2.4.9-1 2.2-1-2.2-2.4-.9 2.4-.9z%27 fill%3D%27%23fde68a%27/%3E%3C/svg%3E") 9 9, crosshair';
 const INTERACTIVE_OVERLAY_SELECTOR =
@@ -42,12 +35,10 @@ const INTERACTIVE_OVERLAY_SELECTOR =
 export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
   const [hotkeyReady, setHotkeyReady] = useState(false);
   const [drawingEnabled, setDrawingEnabled] = useState(true);
-  const [aiEnabled, setAiEnabled] = useState(true);
   const [viewport, setViewport] = useState(getViewportSize());
   const [, setFrame] = useState(0);
 
   const drawingEnabledRef = useRef(true);
-  const aiEnabledRef = useRef(true);
   const autoCollapseRef = useRef(true);
   const isDrawingRef = useRef(false);
   const lassoThemeRef = useRef(getLassoTheme(DEFAULT_LASSO_THEME_ID));
@@ -58,7 +49,6 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
   const productModeRef = useRef(PRODUCT_MODES.AI);
   productModeRef.current = productMode;
 
-  const [signedIn, setSignedIn] = useState(false);
   const [popups, setPopups] = useState([]);
   const [popupsCompact, setPopupsCompact] = useState(false);
   const [bubbleMorph, setBubbleMorph] = useState(null);
@@ -330,19 +320,12 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       const on = isDrawingEnabled(s);
       drawingEnabledRef.current = on;
       setDrawingEnabled(on);
-      const aiOn = isAiEnabled(s);
-      aiEnabledRef.current = aiOn;
-      setAiEnabled(aiOn);
       autoCollapseRef.current = isAutoCollapseEnabled(s);
       lassoThemeRef.current = getLassoTheme(s.lassoTheme);
       redrawInk();
     });
-    isSignedIn().then(setSignedIn);
 
     const onStorageChange = (changes, area) => {
-      if (area === "local" && changes.syncle_session) {
-        isSignedIn().then(setSignedIn);
-      }
       if (area !== "sync") return;
 
       if (changes.enabled !== undefined) {
@@ -363,12 +346,6 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
 
       if (changes.autoCollapse !== undefined) {
         autoCollapseRef.current = changes.autoCollapse.newValue !== false;
-      }
-
-      if (changes.aiEnabled !== undefined) {
-        const aiOn = changes.aiEnabled.newValue !== false;
-        aiEnabledRef.current = aiOn;
-        setAiEnabled(aiOn);
       }
     };
     chrome.storage.onChanged.addListener(onStorageChange);
@@ -430,46 +407,6 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     };
   }, [drawingEnabled, hotkeyReady, productMode]);
 
-  const updatePopupContent = (popupId, patch) => {
-    setPopups((prev) =>
-      prev.map((p) =>
-        p.id === popupId ? { ...p, content: { ...p.content, ...patch } } : p
-      )
-    );
-  };
-
-  const requestAiReply = async (popupId, contextIds) => {
-    if (!contextIds?.pageContextId || !contextIds?.selectionContextId) return;
-
-    updatePopupContent(popupId, {
-      chatStatus: "loading",
-      chatError: "",
-      chatProvider: "",
-      chatModel: "",
-    });
-
-    try {
-      const result = await sendChatMessage({
-        pageContextId: contextIds.pageContextId,
-        selectionContextId: contextIds.selectionContextId,
-        message: AUTO_CHAT_MESSAGE,
-      });
-
-      updatePopupContent(popupId, {
-        chatStatus: "ready",
-        chatReply: result.reply || "",
-        chatProvider: result.provider || "",
-        chatModel: result.model || "",
-        chatError: "",
-      });
-    } catch (err) {
-      updatePopupContent(popupId, {
-        chatStatus: "error",
-        chatError: err instanceof Error ? err.message : String(err),
-      });
-    }
-  };
-
   useEffect(() => {
     const finishCommit = () => {
       const points = pointsRef.current;
@@ -511,178 +448,12 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
             popupOffset,
             content: {
               bbox: bboxOf(pagePts),
-              text: "",
-              extractStatus: "loading",
-              chatDraft: "",
-              chatReply: "",
-              chatStatus: "idle",
-              chatError: "",
-              chatProvider: "",
-              chatModel: "",
-              registerStatus: aiEnabledRef.current && CLOUD_SYNC_ENABLED
-                ? "extracting"
-                : "local",
             },
           },
         ]);
-        // New selections open expanded even when older bubbles are collapsed.
         if (popupsCompactRef.current) {
           addExpandedPopup(id);
         }
-
-        const registerWatchdog = aiEnabledRef.current
-          ? setTimeout(() => {
-              setPopups((prev) =>
-                prev.map((p) =>
-                  p.id === id &&
-                  (p.content.registerStatus === "pending" ||
-                    p.content.registerStatus === "extracting")
-                    ? {
-                        ...p,
-                        content: {
-                          ...p.content,
-                          registerStatus: "error",
-                          registerError:
-                            "Register timed out. Reload the extension and ensure syncle-services is on :3001.",
-                        },
-                      }
-                    : p
-                )
-              );
-            }, 40000)
-          : null;
-
-        const runExtract = () =>
-          runSelectionExtraction(
-            clientPts,
-            id,
-            (registerResult) => {
-              if (registerWatchdog) clearTimeout(registerWatchdog);
-              if (registerResult?.skipped) return;
-              if (registerResult.ok) {
-              setPopups((prev) =>
-                prev.map((p) =>
-                  p.id === id
-                    ? {
-                        ...p,
-                        content: {
-                          ...p.content,
-                          contextIds: {
-                            pageContextId: registerResult.pageContextId,
-                            selectionContextId: registerResult.selectionContextId,
-                          },
-                          registerStatus: "ready",
-                          registerError: "",
-                        },
-                      }
-                    : p
-                )
-              );
-            } else {
-              setPopups((prev) =>
-                prev.map((p) =>
-                  p.id === id
-                    ? {
-                        ...p,
-                        content: {
-                          ...p.content,
-                          registerStatus:
-                            registerResult.reason === "not_signed_in"
-                              ? "no_session"
-                              : "error",
-                          registerError: registerResult.message || "",
-                        },
-                      }
-                    : p
-                )
-              );
-            }
-          },
-            { aiEnabled: aiEnabledRef.current }
-          )
-          .then((extracted) => {
-            const localOnly = !aiEnabledRef.current;
-            const preview = localOnly
-              ? extracted.localDom?.textSnippet ||
-                extracted.focus.text?.trim() ||
-                "(no text in selection)"
-              : extracted.focus.cropImageBase64
-                ? "[Visual selection]"
-                : "No screenshot captured";
-            setPopups((prev) =>
-              prev.map((p) => {
-                if (p.id !== id) return p;
-                const reg = p.content.registerStatus;
-                const registerStatus = localOnly
-                  ? "local"
-                  : !CLOUD_SYNC_ENABLED
-                    ? "local"
-                    : extracted.contextIds
-                      ? "ready"
-                      : reg === "ready" || reg === "error" || reg === "no_session"
-                        ? reg
-                        : reg === "extracting"
-                          ? "pending"
-                          : reg;
-                const contextIds =
-                  extracted.contextIds ?? p.content.contextIds;
-                const canChat =
-                  !localOnly &&
-                  Boolean(
-                    contextIds?.pageContextId && contextIds?.selectionContextId
-                  );
-                return {
-                  ...p,
-                  content: {
-                    ...p.content,
-                    text: preview,
-                    localPreview: localOnly ? preview : "",
-                    contextIds,
-                    extractStatus: "ready",
-                    registerStatus,
-                    chatStatus: canChat ? "loading" : "idle",
-                  },
-                };
-              })
-            );
-
-            const ids = extracted.contextIds;
-            if (
-              aiEnabledRef.current &&
-              ids?.pageContextId &&
-              ids?.selectionContextId
-            ) {
-              requestAiReply(id, ids);
-            }
-          })
-          .catch((err) => {
-            if (registerWatchdog) clearTimeout(registerWatchdog);
-            console.warn("[syncle] extraction failed:", err);
-            setPopups((prev) =>
-              prev.map((p) =>
-                p.id === id
-                  ? {
-                      ...p,
-                      content: {
-                        ...p.content,
-                        text: "Could not capture selection.",
-                        extractStatus: "error",
-                        registerStatus: "error",
-                        registerError:
-                          err instanceof Error
-                            ? err.message
-                            : String(err),
-                      },
-                    }
-                  : p
-              )
-            );
-          });
-
-        // Defer so the popup bubble is not the topmost hit target for caret/element sampling.
-        requestAnimationFrame(() => {
-          requestAnimationFrame(runExtract);
-        });
       }
 
       const { width, height } = viewportRef.current;
@@ -879,96 +650,6 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
             {Math.round(p.content.bbox.h)} px
           </div>
         </div>
-        {p.content.extractStatus === "loading" && (
-          <div style={{ marginTop: 6 }}>
-            <b>Working…</b>{" "}
-            <i>
-              {aiEnabled
-                ? "Extracting selection and preparing AI reply"
-                : "Extracting selection locally…"}
-            </i>
-          </div>
-        )}
-        {p.content.extractStatus === "error" && (
-          <div style={{ marginTop: 6 }}>
-            <b>Extract failed:</b>{" "}
-            <i>
-              {p.content.registerError ||
-                p.content.text ||
-                "Could not read selection"}
-            </i>
-          </div>
-        )}
-        {p.content.extractStatus === "ready" && (
-          <>
-            {!aiEnabled ? (
-              <div
-                style={{
-                  marginTop: 10,
-                  borderTop: "1px solid rgba(0,0,0,0.12)",
-                  paddingTop: 8,
-                }}
-              >
-                <b style={{ fontSize: 13 }}>Local extraction</b>
-                <p style={{ margin: "8px 0 0", fontSize: 12, lineHeight: 1.45 }}>
-                  {p.content.text || p.content.localPreview || "No text found."}
-                </p>
-                <p style={{ margin: "8px 0 0", fontSize: 11, opacity: 0.65 }}>
-                  Full payload logged to DevTools console (F12). No backend or
-                  OpenAI calls in this mode.
-                </p>
-              </div>
-            ) : (
-              <>
-            <div
-              style={{
-                marginTop: 10,
-                borderTop: "1px solid rgba(0,0,0,0.12)",
-                paddingTop: 8,
-              }}
-            >
-              <b style={{ fontSize: 13 }}>AI response</b>
-              {p.content.chatStatus === "loading" && (
-                <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.75 }}>
-                  <i>Thinking…</i>
-                </p>
-              )}
-              {p.content.chatStatus === "ready" && (
-                <div style={{ marginTop: 8 }}>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      lineHeight: 1.45,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {p.content.chatReply}
-                  </div>
-                  {(p.content.chatProvider || p.content.chatModel) && (
-                    <div style={{ marginTop: 6, fontSize: 10, opacity: 0.6 }}>
-                      {p.content.chatProvider || "ai"}
-                      {p.content.chatModel ? ` · ${p.content.chatModel}` : ""}
-                    </div>
-                  )}
-                </div>
-              )}
-              {p.content.chatStatus === "error" && (
-                <p style={{ margin: "8px 0 0", fontSize: 11, color: "#b91c1c" }}>
-                  {p.content.chatError || "Could not fetch AI response."}
-                </p>
-              )}
-            </div>
-
-            {p.content.chatStatus === "loading" && (
-              <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.75 }}>
-                <i>Analyzing…</i>
-              </p>
-            )}
-              </>
-            )}
-          </>
-        )}
       </PopupBubble>
     );
 
@@ -989,7 +670,6 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       onProductModeChange={handleProductModeChange}
       drawingEnabled={drawingEnabled && isAiProductMode(productMode)}
       hotkeyReady={hotkeyReady && isAiProductMode(productMode)}
-      aiEnabled={aiEnabled}
       onUndo={undo}
       onClear={clearAll}
       viewport={viewport}
